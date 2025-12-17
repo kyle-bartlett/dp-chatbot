@@ -192,7 +192,7 @@ export default function HelpPage() {
                 <span className="w-8 h-8 bg-[#00A0E9] text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">3</span>
                 <div>
                   <h3 className="font-semibold text-gray-800">Review Sources</h3>
-                  <p className="text-sm text-gray-500">Click "sources used" under any answer to see which documents were referenced. Click the link icon to open the original document.</p>
+                  <p className="text-sm text-gray-500">Click &quot;sources used&quot; under any answer to see which documents were referenced. Click the link icon to open the original document.</p>
                 </div>
               </li>
             </ol>

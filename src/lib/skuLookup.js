@@ -3,7 +3,7 @@
  * Handles SKU lookups and inventory/forecast data
  */
 
-import { searchSimilar } from './vectorStore'
+import { searchSimilar, searchKeyword } from './vectorStore'
 import { generateQueryEmbedding } from './embeddings'
 
 /**
@@ -17,11 +17,18 @@ export async function searchSKU(sku) {
   const searchQuery = `SKU ${normalizedSku} product inventory forecast supply demand`
 
   try {
-    const embedding = await generateQueryEmbedding(searchQuery)
-    const results = await searchSimilar(embedding, {
-      topK: 10,
-      minScore: 0.5  // Lower threshold for SKU searches
-    })
+    let results = []
+
+    // Prefer embeddings if configured; otherwise use keyword retrieval.
+    if (process.env.OPENAI_API_KEY) {
+      const embedding = await generateQueryEmbedding(searchQuery)
+      results = await searchSimilar(embedding, {
+        topK: 10,
+        minScore: 0.5  // Lower threshold for SKU searches
+      })
+    } else {
+      results = await searchKeyword(searchQuery, { topK: 10 })
+    }
 
     // Filter results that actually contain the SKU
     const skuResults = results.filter(r =>

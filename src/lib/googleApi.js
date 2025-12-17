@@ -38,6 +38,16 @@ function getAuth() {
 }
 
 /**
+ * Build an OAuth client from a user access token (preferred for "Anker-only" files).
+ */
+function getUserOAuth(accessToken) {
+  if (!accessToken) return null
+  const oauth2 = new google.auth.OAuth2()
+  oauth2.setCredentials({ access_token: accessToken })
+  return oauth2
+}
+
+/**
  * Extract Google document ID from URL
  */
 export function extractDocId(url) {
@@ -70,8 +80,9 @@ export function detectDocType(url) {
 /**
  * Fetch content from a Google Sheet
  */
-export async function fetchSpreadsheet(spreadsheetId) {
-  const auth = getAuth()
+export async function fetchSpreadsheet(spreadsheetId, options = {}) {
+  const userAuth = getUserOAuth(options.accessToken)
+  const auth = userAuth || getAuth()
 
   const sheets = google.sheets({
     version: 'v4',
@@ -116,8 +127,9 @@ export async function fetchSpreadsheet(spreadsheetId) {
 /**
  * Fetch content from a Google Doc
  */
-export async function fetchDocument(documentId) {
-  const auth = getAuth()
+export async function fetchDocument(documentId, options = {}) {
+  const userAuth = getUserOAuth(options.accessToken)
+  const auth = userAuth || getAuth()
 
   const docs = google.docs({
     version: 'v1',
@@ -172,7 +184,7 @@ export async function fetchDocument(documentId) {
 /**
  * Fetch content from any Google URL
  */
-export async function fetchGoogleContent(url) {
+export async function fetchGoogleContent(url, options = {}) {
   const docId = extractDocId(url)
   if (!docId) {
     throw new Error('Invalid Google document URL')
@@ -181,10 +193,40 @@ export async function fetchGoogleContent(url) {
   const docType = detectDocType(url)
 
   if (docType === 'spreadsheet') {
-    return await fetchSpreadsheet(docId)
+    return await fetchSpreadsheet(docId, options)
   } else if (docType === 'document') {
-    return await fetchDocument(docId)
+    return await fetchDocument(docId, options)
   } else {
     throw new Error('Unsupported document type. Only Google Sheets and Docs are supported.')
+  }
+}
+
+/**
+ * List files in a Drive folder (non-recursive).
+ */
+export async function listDriveFolder(folderId, options = {}) {
+  const accessToken = options.accessToken
+  const userAuth = getUserOAuth(accessToken)
+  const auth = userAuth || getAuth()
+
+  const drive = google.drive({
+    version: 'v3',
+    auth: typeof auth === 'string' ? undefined : auth,
+    key: typeof auth === 'string' ? auth : undefined,
+  })
+
+  try {
+    const response = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      pageSize: 1000,
+      fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+
+    return response.data.files || []
+  } catch (error) {
+    console.error('Error listing Drive folder:', error.message)
+    throw new Error(`Failed to list Drive folder: ${error.message}`)
   }
 }

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { generateQueryEmbedding } from '@/lib/embeddings'
-import { searchSimilar, getStats } from '@/lib/vectorStore'
+import { searchSimilar, searchKeyword, getStats } from '@/lib/vectorStore'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -79,15 +79,26 @@ export async function POST(request) {
     let context = []
     const stats = await getStats()
 
-    if (stats.totalChunks > 0 && process.env.OPENAI_API_KEY) {
-      try {
-        const queryEmbedding = await generateQueryEmbedding(message)
-        context = await searchSimilar(queryEmbedding, {
-          topK: 5,
-          minScore: 0.65
-        })
-      } catch (ragError) {
-        console.error('RAG error (continuing without context):', ragError.message)
+    // Prefer embeddings retrieval when available; otherwise fall back to keyword retrieval
+    if (stats.totalChunks > 0) {
+      if (stats.totalEmbeddedChunks > 0 && process.env.OPENAI_API_KEY) {
+        try {
+          const queryEmbedding = await generateQueryEmbedding(message)
+          context = await searchSimilar(queryEmbedding, {
+            topK: 5,
+            minScore: 0.65
+          })
+        } catch (ragError) {
+          console.error('RAG error (continuing without context):', ragError.message)
+        }
+      }
+
+      if (context.length === 0) {
+        try {
+          context = await searchKeyword(message, { topK: 5 })
+        } catch (keywordError) {
+          console.error('Keyword retrieval error (continuing without context):', keywordError.message)
+        }
       }
     }
 

@@ -2,6 +2,8 @@
 
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Loader2, LogOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
 
 /**
  * AuthGuard component that protects pages
@@ -9,13 +11,31 @@ import { Loader2, LogOut } from 'lucide-react'
  */
 export default function AuthGuard({ children }) {
   const { data: session, status } = useSession()
+  const [authConfigured, setAuthConfigured] = useState(null) // null = unknown/loading
 
-  // Check if auth is configured by attempting to detect env vars
-  // In production, you would check this server-side
-  const authConfigured = status !== 'unauthenticated' || session !== null
+  // Detect whether auth is configured (server-side truth)
+  useEffect(() => {
+    let cancelled = false
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config')
+        const data = await res.json()
+        if (!cancelled) {
+          setAuthConfigured(!!data.authConfigured)
+        }
+      } catch {
+        if (!cancelled) {
+          // If config endpoint fails, assume auth is enabled (safer)
+          setAuthConfigured(true)
+        }
+      }
+    }
+    loadConfig()
+    return () => { cancelled = true }
+  }, [])
 
   // If session is loading
-  if (status === 'loading') {
+  if (status === 'loading' || authConfigured === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -27,7 +47,7 @@ export default function AuthGuard({ children }) {
   }
 
   // If not authenticated and auth is enforced
-  if (status === 'unauthenticated' && authConfigured) {
+  if (authConfigured && status === 'unauthenticated') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
@@ -81,9 +101,11 @@ export function UserMenu() {
   return (
     <div className="flex items-center gap-2">
       {session.user.image ? (
-        <img
+        <Image
           src={session.user.image}
           alt={session.user.name || 'User'}
+          width={32}
+          height={32}
           className="w-8 h-8 rounded-full"
         />
       ) : (
