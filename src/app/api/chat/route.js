@@ -1,12 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { generateQueryEmbedding } from '@/lib/embeddings'
-import { searchSimilar, getStats } from '@/lib/vectorStore'
+import { searchSimilar, searchKeyword, getStats } from '@/lib/vectorStore'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const BASE_SYSTEM_PROMPT = `You are the Anker Demand Planning Assistant, an AI helper for the Anker Charging team's demand planning department. Your role is to help team members with:
+const BASE_SYSTEM_PROMPT = `You are the Anker Charging Knowledge Hub Assistant, an AI helper for Anker's Charging teams. Your role is to help team members with:
 
 1. **CPFR (Collaborative Planning, Forecasting, and Replenishment)** processes for retailers:
    - Walmart, Target (TGT), Best Buy (BBY), Costco, Apple, Staples
@@ -29,7 +29,7 @@ const BASE_SYSTEM_PROMPT = `You are the Anker Demand Planning Assistant, an AI h
    - Cross-functional documentation
 
 5. **Training Materials**:
-   - Demand Planning Training resources
+   - Training resources and onboarding materials
    - Alloy platform guides
    - Forecast evolution documentation
 
@@ -79,15 +79,26 @@ export async function POST(request) {
     let context = []
     const stats = await getStats()
 
-    if (stats.totalChunks > 0 && process.env.OPENAI_API_KEY) {
-      try {
-        const queryEmbedding = await generateQueryEmbedding(message)
-        context = await searchSimilar(queryEmbedding, {
-          topK: 5,
-          minScore: 0.65
-        })
-      } catch (ragError) {
-        console.error('RAG error (continuing without context):', ragError.message)
+    // Prefer embeddings retrieval when available; otherwise fall back to keyword retrieval
+    if (stats.totalChunks > 0) {
+      if (stats.totalEmbeddedChunks > 0 && process.env.OPENAI_API_KEY) {
+        try {
+          const queryEmbedding = await generateQueryEmbedding(message)
+          context = await searchSimilar(queryEmbedding, {
+            topK: 5,
+            minScore: 0.65
+          })
+        } catch (ragError) {
+          console.error('RAG error (continuing without context):', ragError.message)
+        }
+      }
+
+      if (context.length === 0) {
+        try {
+          context = await searchKeyword(message, { topK: 5 })
+        } catch (keywordError) {
+          console.error('Keyword retrieval error (continuing without context):', keywordError.message)
+        }
       }
     }
 

@@ -2,8 +2,8 @@ import './globals.css'
 import Providers from '@/components/Providers'
 
 export const metadata = {
-  title: 'Anker DP Assistant | Demand Planning Knowledge Hub',
-  description: 'AI-powered assistant for Anker Demand Planning team - CPFR, forecasting, and supply chain knowledge at your fingertips.',
+  title: 'Anker Charging Knowledge Hub | Team Assistant',
+  description: 'AI-powered assistant for Anker Charging teams — CPFR, forecasting, PSI, SOPs, training, and operational knowledge.',
 }
 
 export default function RootLayout({ children }) {

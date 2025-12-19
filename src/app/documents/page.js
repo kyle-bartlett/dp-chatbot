@@ -14,7 +14,8 @@ import {
   CheckCircle,
   AlertCircle,
   Database,
-  FileStack
+  FileStack,
+  FolderOpen
 } from 'lucide-react'
 
 export default function DocumentsPage() {
@@ -27,8 +28,9 @@ export default function DocumentsPage() {
 
   // Form state
   const [showForm, setShowForm] = useState(false)
-  const [formType, setFormType] = useState('url') // 'url' or 'manual'
+  const [formType, setFormType] = useState('url') // 'url' | 'manual' | 'folder'
   const [url, setUrl] = useState('')
+  const [folderUrl, setFolderUrl] = useState('')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
 
@@ -58,25 +60,47 @@ export default function DocumentsPage() {
     setAdding(true)
 
     try {
-      const body = formType === 'url'
-        ? { url, title: title || undefined }
-        : { content, title: title || 'Manual Document', type: 'document' }
+      // Folder import uses a different endpoint
+      if (formType === 'folder') {
+        const res = await fetch('/api/import/folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderUrl })
+        })
 
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to import folder')
+        }
 
-      const data = await res.json()
+        const imported = data.results?.imported ?? 0
+        const supported = data.results?.supportedFiles ?? 0
+        const errCount = (data.results?.errors || []).length
+        setSuccess(`Imported ${imported}/${supported} files from folder${errCount ? ` (${errCount} errors)` : ''}`)
+      } else {
+        const body = formType === 'url'
+          ? { url, title: title || undefined }
+          : { content, title: title || 'Manual Document', type: 'document' }
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to add document')
+        const res = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to add document')
+        }
+
+        const embeddingNote = data.embeddingsEnabled ? '' : ' (keyword search mode)'
+        setSuccess(`Added "${data.document.title}" with ${data.chunksCreated} chunks${embeddingNote}`)
       }
 
-      setSuccess(`Added "${data.document.title}" with ${data.chunksCreated} chunks`)
       setShowForm(false)
       setUrl('')
+      setFolderUrl('')
       setTitle('')
       setContent('')
       loadDocuments()
@@ -201,6 +225,17 @@ export default function DocumentsPage() {
                 <FileText className="w-4 h-4 inline mr-2" />
                 Paste Content
               </button>
+              <button
+                onClick={() => setFormType('folder')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  formType === 'folder'
+                    ? 'bg-[#00A0E9] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <FolderOpen className="w-4 h-4 inline mr-2" />
+                Drive Folder
+              </button>
             </div>
 
             <form onSubmit={handleAddDocument}>
@@ -218,7 +253,24 @@ export default function DocumentsPage() {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/30 focus:border-[#00A0E9]"
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    Note: Document must be publicly accessible or shared with the service account
+                    Tip: For Anker-only files, sign in with Google so the app can import using your access.
+                  </p>
+                </div>
+              ) : formType === 'folder' ? (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Google Drive Folder URL
+                  </label>
+                  <input
+                    type="url"
+                    value={folderUrl}
+                    onChange={(e) => setFolderUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/30 focus:border-[#00A0E9]"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Imports Google Docs + Sheets in that folder (non-recursive). Requires Google sign-in.
                   </p>
                 </div>
               ) : (
@@ -273,6 +325,7 @@ export default function DocumentsPage() {
                   onClick={() => {
                     setShowForm(false)
                     setUrl('')
+                    setFolderUrl('')
                     setTitle('')
                     setContent('')
                   }}
@@ -359,10 +412,11 @@ export default function DocumentsPage() {
         <div className="mt-8 p-4 bg-gray-50 rounded-xl">
           <h3 className="font-medium text-gray-700 mb-2">Tips for adding documents:</h3>
           <ul className="text-sm text-gray-500 space-y-1">
-            <li>• <strong>Google Sheets/Docs:</strong> Make sure the document is publicly accessible (anyone with link can view)</li>
+            <li>• <strong>Google Sheets/Docs:</strong> For Anker-only content, sign in so imports run under your account</li>
+            <li>• <strong>Drive Folder:</strong> Best way to bring in an entire knowledge hub quickly</li>
             <li>• <strong>Paste Content:</strong> Copy-paste from Lark docs or any other source</li>
             <li>• <strong>Best results:</strong> Add SOPs, training docs, CPFR processes, and KPI definitions</li>
-            <li>• <strong>API Keys needed:</strong> OPENAI_API_KEY (for embeddings) + GOOGLE_API_KEY (for Google docs)</li>
+            <li>• <strong>Embeddings (optional):</strong> If OpenAI embeddings aren’t configured, the bot still works via keyword retrieval</li>
           </ul>
         </div>
       </main>

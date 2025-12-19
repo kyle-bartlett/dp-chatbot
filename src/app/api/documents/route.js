@@ -9,6 +9,7 @@ import { fetchGoogleContent, extractDocId, detectDocType } from '@/lib/googleApi
 import { processDocument } from '@/lib/chunker'
 import { generateEmbeddings } from '@/lib/embeddings'
 import { addDocument, addChunks, getDocuments, getStats } from '@/lib/vectorStore'
+import { auth } from '@/lib/auth'
 
 export async function GET() {
   try {
@@ -35,6 +36,8 @@ export async function POST(request) {
 
     let docData
     let docId
+    const session = await auth()
+    const accessToken = session?.accessToken
 
     // Option 1: Fetch from Google URL
     if (url) {
@@ -55,7 +58,7 @@ export async function POST(request) {
       }
 
       docId = googleDocId
-      docData = await fetchGoogleContent(url)
+      docData = await fetchGoogleContent(url, { accessToken })
       docData.url = url
     }
     // Option 2: Manual content
@@ -120,20 +123,13 @@ export async function POST(request) {
     if (chunks.length > 0) {
       const texts = chunks.map(c => c.text)
 
-      // Check if OpenAI key is configured
-      if (!process.env.OPENAI_API_KEY) {
-        return Response.json(
-          {
-            error: 'OpenAI API key not configured. Add OPENAI_API_KEY to your .env.local file for embeddings.',
-            document,
-            chunks: chunks.length
-          },
-          { status: 500 }
-        )
+      // If embeddings are configured, store vectors; otherwise still store raw chunks
+      if (process.env.OPENAI_API_KEY) {
+        const embeddings = await generateEmbeddings(texts)
+        await addChunks(chunks, embeddings)
+      } else {
+        await addChunks(chunks, null)
       }
-
-      const embeddings = await generateEmbeddings(texts)
-      await addChunks(chunks, embeddings)
     }
 
     // Get updated stats
@@ -143,6 +139,7 @@ export async function POST(request) {
       success: true,
       document,
       chunksCreated: chunks.length,
+      embeddingsEnabled: !!process.env.OPENAI_API_KEY,
       stats
     })
   } catch (error) {

@@ -114,7 +114,12 @@ export async function removeDocument(docId) {
 
   // Remove associated chunks
   const vectors = await loadVectors()
-  vectors.chunks = vectors.chunks.filter(c => c.documentId !== docId)
+  vectors.chunks = vectors.chunks.filter(c => {
+    if (c.documentId === docId) return false
+    // Spreadsheet chunks are stored with `${docId}-${sheetName}` ids
+    if (typeof c.documentId === 'string' && c.documentId.startsWith(docId + '-')) return false
+    return true
+  })
   await saveVectors(vectors)
 
   // Clear cache
@@ -136,18 +141,20 @@ export async function getDocuments() {
 export async function addChunks(chunks, embeddings) {
   const vectors = await loadVectors()
 
-  // Remove existing chunks for the same document
+  // Remove existing chunks for any incoming documentId(s)
   if (chunks.length > 0) {
-    const docId = chunks[0].documentId
-    vectors.chunks = vectors.chunks.filter(c => c.documentId !== docId)
+    const docIds = new Set(chunks.map(c => c.documentId).filter(Boolean))
+    vectors.chunks = vectors.chunks.filter(c => !docIds.has(c.documentId))
   }
 
   // Add new chunks with embeddings
+  const hasEmbeddings = Array.isArray(embeddings) && embeddings.length === chunks.length
   chunks.forEach((chunk, index) => {
-    vectors.chunks.push({
-      ...chunk,
-      embedding: embeddings[index]
-    })
+    const record = { ...chunk }
+    if (hasEmbeddings) {
+      record.embedding = embeddings[index]
+    }
+    vectors.chunks.push(record)
   })
 
   await saveVectors(vectors)
@@ -168,7 +175,7 @@ export async function searchSimilar(queryEmbedding, options = {}) {
   // Calculate similarity scores
   const scored = vectors.chunks.map(chunk => ({
     ...chunk,
-    score: cosineSimilarity(queryEmbedding, chunk.embedding)
+    score: chunk.embedding ? cosineSimilarity(queryEmbedding, chunk.embedding) : 0
   }))
 
   // Sort by score and filter
@@ -182,6 +189,50 @@ export async function searchSimilar(queryEmbedding, options = {}) {
 }
 
 /**
+ * Simple keyword retrieval fallback (no embeddings required).
+ * Scores chunks by term matches; suitable for small/medium corpora.
+ */
+export async function searchKeyword(query, options = {}) {
+  const { topK = 5 } = options
+  const vectors = await loadVectors()
+
+  if (!query || vectors.chunks.length === 0) {
+    return []
+  }
+
+  const terms = Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .map(t => t.trim())
+        .filter(t => t.length >= 3)
+    )
+  )
+
+  // If query is too short, just return empty (avoid garbage matches)
+  if (terms.length === 0) {
+    return []
+  }
+
+  const scored = vectors.chunks.map(chunk => {
+    const haystack = `${chunk.documentTitle || ''}\n${chunk.text || ''}`.toLowerCase()
+    let hits = 0
+    for (const term of terms) {
+      if (haystack.includes(term)) hits++
+    }
+    const score = hits / terms.length
+    return { ...chunk, score }
+  })
+
+  return scored
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK)
+    .map(({ embedding, ...rest }) => rest)
+}
+
+/**
  * Get stats about the vector store
  */
 export async function getStats() {
@@ -189,16 +240,19 @@ export async function getStats() {
   const docs = await loadDocuments()
 
   const docStats = {}
+  let totalEmbeddedChunks = 0
   vectors.chunks.forEach(chunk => {
     if (!docStats[chunk.documentId]) {
       docStats[chunk.documentId] = 0
     }
     docStats[chunk.documentId]++
+    if (chunk.embedding) totalEmbeddedChunks++
   })
 
   return {
     totalDocuments: docs.documents.length,
     totalChunks: vectors.chunks.length,
+    totalEmbeddedChunks,
     documentsWithChunks: Object.keys(docStats).length,
     chunksPerDocument: docStats
   }
