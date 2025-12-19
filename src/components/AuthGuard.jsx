@@ -55,7 +55,7 @@ export default function AuthGuard({ children }) {
             Sign In Required
           </h1>
           <p className="text-gray-500 mb-6">
-            Please sign in with your Anker account to access the DP Assistant.
+            Please sign in with your Anker account to access the Charging Knowledge Hub.
           </p>
           <button
             onClick={() => signIn('google')}

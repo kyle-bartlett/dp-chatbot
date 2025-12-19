@@ -1,6 +1,6 @@
-# Anker DP Assistant
+# Anker Charging Knowledge Hub
 
-AI-powered chatbot for the Anker Demand Planning team. Built with Next.js and Claude AI with RAG (Retrieval Augmented Generation) for intelligent document search.
+AI-powered chatbot for Anker Charging teams. Built with Next.js and Claude AI with RAG (Retrieval Augmented Generation) for intelligent document search.
 
 ## Features
 
@@ -8,6 +8,7 @@ AI-powered chatbot for the Anker Demand Planning team. Built with Next.js and Cl
 - **Claude AI Backend** - Powered by Claude for intelligent responses
 - **Document RAG System** - Feed your docs, get intelligent answers
 - **Google Sheets/Docs Integration** - Import directly from Google
+- **Drive Folder Import** - Import all Docs/Sheets in a folder (non-recursive)
 - **Manual Content Upload** - Paste from Lark or any source
 - **Semantic Search** - Finds relevant information across all documents
 - **Source Citations** - Know where answers come from
@@ -51,7 +52,7 @@ Open [http://localhost:3000](http://localhost:3000)
 ## Adding Documents
 
 1. Click the **documents icon** (📄) in the header
-2. Choose **Google URL** or **Paste Content**
+2. Choose **Google URL**, **Drive Folder**, or **Paste Content**
 3. Add your SOPs, training docs, CPFR procedures
 4. The chatbot will automatically search them when answering
 
@@ -59,6 +60,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 - Google Sheets (with Google API key)
 - Google Docs (with Google API key)
+- Google Drive folder import (requires Google OAuth sign-in)
 - Manual paste (Lark, text, any content)
 
 ## Project Structure
@@ -124,7 +126,7 @@ anker-dp-chatbot/
 - [x] Document ingestion system
 - [x] RAG with semantic search
 - [x] Document management page
-- [ ] Google OAuth (Anker domain restriction)
+- [x] Google OAuth (Anker domain restriction)
 - [ ] SKU lookup functionality
 - [ ] CPFR forecast integration
 - [ ] Lark API integration

@@ -55,7 +55,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="bg-white border-t border-gray-100 py-2 px-4">
           <p className="text-xs text-center text-gray-400">
-            Anker Demand Planning Assistant | Powered by Claude AI | Internal Use Only
+            Anker Charging Knowledge Hub | Powered by Claude AI | Internal Use Only
           </p>
         </footer>
       </div>

@@ -6,7 +6,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const BASE_SYSTEM_PROMPT = `You are the Anker Demand Planning Assistant, an AI helper for the Anker Charging team's demand planning department. Your role is to help team members with:
+const BASE_SYSTEM_PROMPT = `You are the Anker Charging Knowledge Hub Assistant, an AI helper for Anker's Charging teams. Your role is to help team members with:
 
 1. **CPFR (Collaborative Planning, Forecasting, and Replenishment)** processes for retailers:
    - Walmart, Target (TGT), Best Buy (BBY), Costco, Apple, Staples
@@ -29,7 +29,7 @@ const BASE_SYSTEM_PROMPT = `You are the Anker Demand Planning Assistant, an AI h
    - Cross-functional documentation
 
 5. **Training Materials**:
-   - Demand Planning Training resources
+   - Training resources and onboarding materials
    - Alloy platform guides
    - Forecast evolution documentation
 

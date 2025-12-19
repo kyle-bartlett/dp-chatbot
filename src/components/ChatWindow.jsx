@@ -6,7 +6,7 @@ import TypingIndicator from './TypingIndicator'
 import ChatInput from './ChatInput'
 import { FileText, TrendingUp, Package, BookOpen, Search, Trash2, Download } from 'lucide-react'
 
-const WELCOME_MESSAGE = `Hello! I'm your Anker Demand Planning Assistant. I'm here to help you with:
+const WELCOME_MESSAGE = `Hello! I'm your Anker Charging Knowledge Hub Assistant. I'm here to help you with:
 
 • **CPFR processes** - Walmart, Target, BBY, Costco, Apple procedures
 • **Forecasting** - Logic, ladders, and refresh processes
@@ -25,7 +25,7 @@ const QUICK_ACTIONS = [
   { icon: Search, label: 'SKU Lookup', query: 'Look up information for SKU A2140' },
 ]
 
-const STORAGE_KEY = 'anker-dp-chat-history'
+const STORAGE_KEY = 'anker-charging-hub-chat-history'
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState([
@@ -140,7 +140,7 @@ export default function ChatWindow() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `anker-dp-chat-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `anker-charging-hub-chat-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
   }

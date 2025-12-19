@@ -107,10 +107,10 @@ export default function HelpPage() {
             <HelpCircle className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-3">
-            Welcome to Anker DP Assistant
+            Welcome to Anker Charging Knowledge Hub
           </h1>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Your AI-powered knowledge hub for demand planning. Get instant answers about CPFR, forecasting, SOPs, and more.
+            Your AI-powered knowledge hub for Charging teams. Get instant answers about CPFR, forecasting, PSI, SOPs, training, and more.
           </p>
         </div>
 
@@ -202,7 +202,7 @@ export default function HelpPage() {
         {/* Need Help */}
         <section className="text-center py-8">
           <p className="text-gray-500 mb-4">
-            Need additional help? Contact the DP team or your system administrator.
+            Need additional help? Contact your team lead or your system administrator.
           </p>
           <Link
             href="/"
