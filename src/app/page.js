@@ -4,14 +4,18 @@ import Link from 'next/link'
 import Logo from '@/components/Logo'
 import ChatWindow from '@/components/ChatWindow'
 import AuthGuard, { UserMenu } from '@/components/AuthGuard'
+import AnkerBackground from '@/components/AnkerBackground'
 import { Settings, HelpCircle, FileStack } from 'lucide-react'
 
 export default function Home() {
   return (
     <AuthGuard>
-      <div className="h-screen flex flex-col">
+      <AnkerBackground />
+      <div className="h-screen flex flex-col relative">
         {/* Header */}
-        <header className="bg-[#151823]/80 backdrop-blur-md border-b border-[#00A0E9]/20 shadow-lg">
+        <header className="bg-[#151823]/90 backdrop-blur-md border-b border-[#00A0E9]/30 shadow-lg relative">
+          {/* Subtle blue glow at top of header */}
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00A0E9]/50 to-transparent" />
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <Logo />
 
@@ -48,12 +52,14 @@ export default function Home() {
         </header>
 
         {/* Main chat area */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden p-2">
           <ChatWindow />
         </main>
 
         {/* Footer */}
-        <footer className="bg-[#151823]/80 backdrop-blur-md border-t border-[#00A0E9]/20 py-2 px-4">
+        <footer className="bg-[#151823]/90 backdrop-blur-md border-t border-[#00A0E9]/30 py-2 px-4 relative">
+          {/* Subtle blue glow at bottom of footer */}
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00A0E9]/50 to-transparent" />
           <p className="text-xs text-center text-gray-400">
             Anker Charging Offline Planning Assistant | Powered by Claude AI | Internal Use Only
           </p>

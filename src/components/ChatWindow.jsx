@@ -180,12 +180,14 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-transparent relative">
-      {/* Show login overlay if not authenticated */}
-      {!session?.user && <LoginRequiredOverlay />}
-      {/* Chat toolbar */}
-      {messages.length > 2 && (
-        <div className="px-4 py-2 border-b border-[#00A0E9]/20 bg-[#151823]/60 backdrop-blur-sm">
+    <div className="flex flex-col h-full relative">
+      {/* Chat container with distinct lighter background */}
+      <div className="flex flex-col h-full bg-[#1e2335]/95 backdrop-blur-md border border-[#00A0E9]/30 rounded-lg shadow-2xl neon-glow-sm">
+        {/* Show login overlay if not authenticated */}
+        {!session?.user && <LoginRequiredOverlay />}
+        {/* Chat toolbar */}
+        {messages.length > 2 && (
+          <div className="px-4 py-2 border-b border-[#00A0E9]/20 bg-[#1a1d2e]/80 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto flex justify-end gap-2">
             <button
               onClick={handleExportChat}
@@ -246,8 +248,9 @@ export default function ChatWindow() {
         </div>
       )}
 
-      {/* Input area */}
-      <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+        {/* Input area */}
+        <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+      </div>
     </div>
   )
 }

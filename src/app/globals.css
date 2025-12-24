@@ -3,9 +3,10 @@
 :root {
   --anker-blue: #00A0E9;
   --anker-blue-glow: #00A0E9;
-  --anker-dark: #0a0a0f;
-  --anker-dark-blue: #0d1421;
+  --anker-dark: #050508;
+  --anker-dark-blue: #0a0d14;
   --anker-surface: #151823;
+  --anker-chat-bg: #1e2335;
   --anker-light: #f8f9fa;
   --anker-accent: #00d4aa;
   --anker-text-primary: #ffffff;
@@ -25,39 +26,94 @@ body {
   isolation: isolate;
   overflow-x: hidden;
   background:
-    radial-gradient(1200px 600px at 10% -5%, rgba(0, 160, 233, 0.15), transparent 50%),
-    radial-gradient(1000px 500px at 90% 15%, rgba(0, 160, 233, 0.12), transparent 50%),
-    radial-gradient(800px 400px at 50% 80%, rgba(0, 160, 233, 0.08), transparent 50%),
+    radial-gradient(1200px 600px at 10% -5%, rgba(0, 160, 233, 0.12), transparent 50%),
+    radial-gradient(1000px 500px at 90% 15%, rgba(0, 160, 233, 0.10), transparent 50%),
+    radial-gradient(800px 400px at 50% 80%, rgba(0, 160, 233, 0.06), transparent 50%),
     linear-gradient(180deg, var(--anker-dark) 0%, var(--anker-dark-blue) 50%, var(--anker-dark) 100%);
 }
 
+/* Anker-inspired diagonal light streak */
 .app-shell::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.5;
   background-image:
+    /* Diagonal light streak (bottom left to upper right) */
+    linear-gradient(
+      135deg,
+      transparent 0%,
+      transparent 35%,
+      rgba(0, 160, 233, 0.15) 40%,
+      rgba(0, 160, 233, 0.25) 50%,
+      rgba(0, 160, 233, 0.15) 60%,
+      transparent 65%,
+      transparent 100%
+    ),
+    /* Vertical light streaks */
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 15%,
+      rgba(0, 160, 233, 0.08) 16%,
+      rgba(0, 160, 233, 0.12) 17%,
+      rgba(0, 160, 233, 0.08) 18%,
+      transparent 19%,
+      transparent 45%,
+      rgba(0, 160, 233, 0.06) 46%,
+      rgba(0, 160, 233, 0.10) 47%,
+      rgba(0, 160, 233, 0.06) 48%,
+      transparent 49%,
+      transparent 75%,
+      rgba(0, 160, 233, 0.08) 76%,
+      rgba(0, 160, 233, 0.12) 77%,
+      rgba(0, 160, 233, 0.08) 78%,
+      transparent 79%,
+      transparent 100%
+    ),
+    /* Dot pattern overlay */
     radial-gradient(2px 2px at 40px 50px, rgba(0, 160, 233, 0.15) 0, rgba(0, 160, 233, 0.15) 2px, transparent 2px),
     radial-gradient(1px 1px at 100px 100px, rgba(0, 160, 233, 0.1) 0, rgba(0, 160, 233, 0.1) 1px, transparent 1px);
-  background-size: 200px 200px, 300px 300px;
+  background-size: 
+    100% 100%,
+    100% 100%,
+    200px 200px,
+    300px 300px;
+  background-position:
+    0% 0%,
+    0% 0%,
+    0 0,
+    0 0;
 }
 
+/* Reflective surface effect at bottom (Anker Prime style) */
 .app-shell::after {
   content: '';
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 200px;
+  height: 300px;
   z-index: -1;
   pointer-events: none;
-  background: linear-gradient(to top, 
-    rgba(0, 160, 233, 0.1) 0%,
-    rgba(0, 160, 233, 0.05) 30%,
-    transparent 100%
-  );
+  background: 
+    /* Reflective dark blue surface */
+    linear-gradient(to top, 
+      rgba(13, 20, 33, 0.95) 0%,
+      rgba(13, 20, 33, 0.85) 20%,
+      rgba(13, 20, 33, 0.6) 50%,
+      rgba(13, 20, 33, 0.3) 80%,
+      transparent 100%
+    ),
+    /* Blue glow from bottom */
+    linear-gradient(to top, 
+      rgba(0, 160, 233, 0.15) 0%,
+      rgba(0, 160, 233, 0.10) 15%,
+      rgba(0, 160, 233, 0.05) 30%,
+      transparent 60%
+    );
   mask-image: linear-gradient(to top, black 0%, transparent 100%);
 }
 

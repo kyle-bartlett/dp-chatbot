@@ -55,7 +55,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 border-t border-[#00A0E9]/20 bg-[#151823]/80 backdrop-blur-md">
+    <form onSubmit={handleSubmit} className="p-4 border-t border-[#00A0E9]/20 bg-transparent">
       <div className="flex items-end gap-3 max-w-4xl mx-auto">
         {/* Attachment button (future feature) */}
         <button
