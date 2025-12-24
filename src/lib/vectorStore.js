@@ -1,206 +1,164 @@
 /**
- * Simple file-based vector store
- * Stores document chunks with embeddings for semantic search
- * Can be upgraded to Pinecone/Supabase later for production
+ * Supabase-based vector store
+ * Stores document chunks with embeddings for semantic search in PostgreSQL
  */
 
-import fs from 'fs/promises'
-import path from 'path'
-import { cosineSimilarity } from './embeddings'
-
-const DATA_DIR = path.join(process.cwd(), 'data')
-const VECTORS_FILE = path.join(DATA_DIR, 'vectors.json')
-const DOCUMENTS_FILE = path.join(DATA_DIR, 'documents.json')
-
-// In-memory cache
-let vectorsCache = null
-let documentsCache = null
-
-/**
- * Ensure data directory exists
- */
-async function ensureDataDir() {
-  try {
-    await fs.access(DATA_DIR)
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true })
-  }
-}
-
-/**
- * Load vectors from file
- */
-async function loadVectors() {
-  if (vectorsCache) return vectorsCache
-
-  try {
-    await ensureDataDir()
-    const data = await fs.readFile(VECTORS_FILE, 'utf-8')
-    vectorsCache = JSON.parse(data)
-  } catch {
-    vectorsCache = { chunks: [] }
-  }
-
-  return vectorsCache
-}
-
-/**
- * Save vectors to file
- */
-async function saveVectors(vectors) {
-  await ensureDataDir()
-  vectorsCache = vectors
-  await fs.writeFile(VECTORS_FILE, JSON.stringify(vectors, null, 2))
-}
-
-/**
- * Load documents metadata from file
- */
-export async function loadDocuments() {
-  if (documentsCache) return documentsCache
-
-  try {
-    await ensureDataDir()
-    const data = await fs.readFile(DOCUMENTS_FILE, 'utf-8')
-    documentsCache = JSON.parse(data)
-  } catch {
-    documentsCache = { documents: [] }
-  }
-
-  return documentsCache
-}
-
-/**
- * Save documents metadata to file
- */
-async function saveDocuments(docs) {
-  await ensureDataDir()
-  documentsCache = docs
-  await fs.writeFile(DOCUMENTS_FILE, JSON.stringify(docs, null, 2))
-}
+import { supabase } from './supabaseClient'
 
 /**
  * Add a document to the store
  */
 export async function addDocument(doc) {
-  const docs = await loadDocuments()
+  const { id, title, type, url, metadata } = doc
+  
+  const { data, error } = await supabase
+    .from('documents')
+    .upsert({
+      id,
+      title,
+      type,
+      url,
+      metadata,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' })
+    .select()
+    .single()
 
-  // Check if document already exists
-  const existingIndex = docs.documents.findIndex(d => d.id === doc.id)
-  if (existingIndex >= 0) {
-    docs.documents[existingIndex] = {
-      ...docs.documents[existingIndex],
-      ...doc,
-      updatedAt: new Date().toISOString()
-    }
-  } else {
-    docs.documents.push({
-      ...doc,
-      createdAt: new Date().toISOString()
-    })
+  if (error) {
+    console.error('Error adding document:', error)
+    throw error
   }
 
-  await saveDocuments(docs)
-  return doc
+  return data
 }
 
 /**
  * Remove a document and its chunks from the store
  */
 export async function removeDocument(docId) {
-  const docs = await loadDocuments()
-  docs.documents = docs.documents.filter(d => d.id !== docId)
-  await saveDocuments(docs)
+  // Cascading delete should handle chunks if foreign key is set up correctly
+  // But strictly we delete the document
+  const { error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', docId)
 
-  // Remove associated chunks
-  const vectors = await loadVectors()
-  vectors.chunks = vectors.chunks.filter(c => c.documentId !== docId)
-  await saveVectors(vectors)
-
-  // Clear cache
-  documentsCache = null
-  vectorsCache = null
+  if (error) {
+    console.error('Error removing document:', error)
+    throw error
+  }
 }
 
 /**
  * Get all documents
  */
 export async function getDocuments() {
-  const docs = await loadDocuments()
-  return docs.documents
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching documents:', error)
+    return []
+  }
+
+  return data
 }
 
 /**
  * Add chunks with embeddings to the vector store
  */
 export async function addChunks(chunks, embeddings) {
-  const vectors = await loadVectors()
+  if (!chunks || chunks.length === 0) return
 
-  // Remove existing chunks for the same document
-  if (chunks.length > 0) {
-    const docId = chunks[0].documentId
-    vectors.chunks = vectors.chunks.filter(c => c.documentId !== docId)
+  const docId = chunks[0].documentId
+
+  // First, delete existing chunks for this document to avoid duplicates/stale chunks
+  const { error: deleteError } = await supabase
+    .from('document_chunks')
+    .delete()
+    .eq('document_id', docId)
+
+  if (deleteError) {
+    console.error('Error clearing old chunks:', deleteError)
+    throw deleteError
   }
 
-  // Add new chunks with embeddings
-  chunks.forEach((chunk, index) => {
-    vectors.chunks.push({
-      ...chunk,
-      embedding: embeddings[index]
-    })
-  })
+  // Prepare rows for insertion
+  const rows = chunks.map((chunk, index) => ({
+    document_id: docId,
+    content: chunk.text, // Assuming 'text' is the content field in chunk object
+    chunk_index: index,
+    embedding: embeddings[index],
+    metadata: {
+      documentTitle: chunk.documentTitle,
+      documentUrl: chunk.documentUrl,
+      ...chunk.metadata
+    }
+  }))
 
-  await saveVectors(vectors)
+  const { error: insertError } = await supabase
+    .from('document_chunks')
+    .insert(rows)
+
+  if (insertError) {
+    console.error('Error inserting chunks:', insertError)
+    throw insertError
+  }
 }
 
 /**
- * Search for similar chunks using cosine similarity
+ * Search for similar chunks using cosine similarity via Supabase RPC
  */
 export async function searchSimilar(queryEmbedding, options = {}) {
   const { topK = 5, minScore = 0.7 } = options
 
-  const vectors = await loadVectors()
+  const { data, error } = await supabase.rpc('match_documents', {
+    query_embedding: queryEmbedding,
+    match_threshold: minScore,
+    match_count: topK
+  })
 
-  if (vectors.chunks.length === 0) {
+  if (error) {
+    console.error('Error searching similar chunks:', error)
     return []
   }
 
-  // Calculate similarity scores
-  const scored = vectors.chunks.map(chunk => ({
-    ...chunk,
-    score: cosineSimilarity(queryEmbedding, chunk.embedding)
+  // Map results to expected format
+  return data.map(match => ({
+    text: match.content,
+    score: match.similarity,
+    documentId: match.document_id,
+    documentTitle: match.metadata?.documentTitle,
+    documentUrl: match.metadata?.documentUrl,
+    metadata: match.metadata
   }))
-
-  // Sort by score and filter
-  const results = scored
-    .filter(item => item.score >= minScore)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK)
-    .map(({ embedding, ...rest }) => rest) // Remove embedding from results
-
-  return results
 }
 
 /**
  * Get stats about the vector store
  */
 export async function getStats() {
-  const vectors = await loadVectors()
-  const docs = await loadDocuments()
+  const { count: docCount, error: docError } = await supabase
+    .from('documents')
+    .select('*', { count: 'exact', head: true })
 
-  const docStats = {}
-  vectors.chunks.forEach(chunk => {
-    if (!docStats[chunk.documentId]) {
-      docStats[chunk.documentId] = 0
+  const { count: chunkCount, error: chunkError } = await supabase
+    .from('document_chunks')
+    .select('*', { count: 'exact', head: true })
+
+  if (docError || chunkError) {
+    console.error('Error getting stats:', docError, chunkError)
+    return {
+      totalDocuments: 0,
+      totalChunks: 0
     }
-    docStats[chunk.documentId]++
-  })
+  }
 
   return {
-    totalDocuments: docs.documents.length,
-    totalChunks: vectors.chunks.length,
-    documentsWithChunks: Object.keys(docStats).length,
-    chunksPerDocument: docStats
+    totalDocuments: docCount || 0,
+    totalChunks: chunkCount || 0
   }
 }
 
@@ -208,8 +166,5 @@ export async function getStats() {
  * Clear all data (for testing/reset)
  */
 export async function clearAll() {
-  await saveVectors({ chunks: [] })
-  await saveDocuments({ documents: [] })
-  vectorsCache = null
-  documentsCache = null
+  await supabase.from('documents').delete().neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
 }

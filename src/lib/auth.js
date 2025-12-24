@@ -18,6 +18,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: 'openid email profile https://www.googleapis.com/auth/drive.readonly',
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        },
+      },
     }),
   ],
   callbacks: {
@@ -51,11 +59,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       return true
     },
+    async jwt({ token, account }) {
+      // Persist the OAuth access_token to the token right after signin
+      if (account) {
+        token.accessToken = account.access_token
+      }
+      return token
+    },
     async session({ session, token }) {
-      // Add user info to session
+      // Add user info and access token to session
       if (session.user) {
         session.user.id = token.sub
       }
+      session.accessToken = token.accessToken
       return session
     },
   },

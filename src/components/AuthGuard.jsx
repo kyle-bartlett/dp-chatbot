@@ -35,7 +35,7 @@ export default function AuthGuard({ children }) {
             Sign In Required
           </h1>
           <p className="text-gray-500 mb-6">
-            Please sign in with your Anker account to access the DP Assistant.
+            Please sign in with your Anker account to access the Anker Charging Knowledge Hub.
           </p>
           <button
             onClick={() => signIn('google')}
@@ -56,17 +56,20 @@ export default function AuthGuard({ children }) {
  * User menu component for authenticated users
  */
 export function UserMenu() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
   if (!session?.user) {
-    // Auth not configured or not signed in - show placeholder
+    // Not signed in - show sign in button
     return (
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-gradient-to-br from-[#00A0E9] to-[#00d4aa] rounded-full flex items-center justify-center text-white text-sm font-medium">
-          A
+      <button
+        onClick={() => signIn('google')}
+        className="flex items-center gap-2 px-3 py-1.5 bg-[#00A0E9] hover:bg-[#0090d9] text-white rounded-lg transition-colors cursor-pointer"
+      >
+        <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-white text-xs font-medium">
+          G
         </div>
-        <span className="text-sm text-gray-600 hidden sm:block">Anker User</span>
-      </div>
+        <span className="text-sm font-medium">Sign In</span>
+      </button>
     )
   }
 

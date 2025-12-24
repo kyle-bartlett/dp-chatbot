@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
 import ChatInput from './ChatInput'
-import { FileText, TrendingUp, Package, BookOpen, Search, Trash2, Download } from 'lucide-react'
+import { FileText, TrendingUp, Package, BookOpen, Search, Trash2, Download, Lock } from 'lucide-react'
 
 const WELCOME_MESSAGE = `Hello! I'm your Anker Demand Planning Assistant. I'm here to help you with:
 
@@ -27,7 +28,40 @@ const QUICK_ACTIONS = [
 
 const STORAGE_KEY = 'anker-dp-chat-history'
 
+// Fun ASCII-style login prompt
+function LoginRequiredOverlay() {
+  return (
+    <div className="absolute inset-0 bg-gradient-to-br from-[#00A0E9]/5 to-[#00d4aa]/5 backdrop-blur-sm flex items-center justify-center z-10">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center border border-gray-100">
+        <div className="mb-6">
+          <pre className="text-[#00A0E9] text-xs font-mono leading-tight inline-block text-left">
+{`    ┌─────────────────────────┐
+    │  ⚡ ACCESS REQUIRED ⚡  │
+    ├─────────────────────────┤
+    │                         │
+    │   ┌───┐                 │
+    │   │ 🔐│  Please log in  │
+    │   └───┘   to continue   │
+    │                         │
+    │   Your forecast awaits! │
+    │                         │
+    └─────────────────────────┘`}
+          </pre>
+        </div>
+        <p className="text-gray-600 mb-4">
+          Sign in with your <span className="font-semibold text-[#00A0E9]">@anker.com</span> account to access the Demand Planning Assistant
+        </p>
+        <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+          <Lock className="w-4 h-4" />
+          <span>Internal Use Only</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ChatWindow() {
+  const { data: session } = useSession()
   const [messages, setMessages] = useState([
     { id: 1, content: WELCOME_MESSAGE, isUser: false, sources: [] }
   ])
@@ -146,7 +180,9 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white relative">
+      {/* Show login overlay if not authenticated */}
+      {!session?.user && <LoginRequiredOverlay />}
       {/* Chat toolbar */}
       {messages.length > 2 && (
         <div className="px-4 py-2 border-b border-gray-100 bg-white/50 backdrop-blur-sm">

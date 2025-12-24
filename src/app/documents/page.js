@@ -218,7 +218,7 @@ export default function DocumentsPage() {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/30 focus:border-[#00A0E9]"
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    Note: Document must be publicly accessible or shared with the service account
+                    Uses your Anker Google account to access files you have permission to view
                   </p>
                 </div>
               ) : (
@@ -359,10 +359,10 @@ export default function DocumentsPage() {
         <div className="mt-8 p-4 bg-gray-50 rounded-xl">
           <h3 className="font-medium text-gray-700 mb-2">Tips for adding documents:</h3>
           <ul className="text-sm text-gray-500 space-y-1">
-            <li>• <strong>Google Sheets/Docs:</strong> Make sure the document is publicly accessible (anyone with link can view)</li>
+            <li>• <strong>Google Sheets/Docs:</strong> Any file you can access with your Anker account will work</li>
             <li>• <strong>Paste Content:</strong> Copy-paste from Lark docs or any other source</li>
             <li>• <strong>Best results:</strong> Add SOPs, training docs, CPFR processes, and KPI definitions</li>
-            <li>• <strong>API Keys needed:</strong> OPENAI_API_KEY (for embeddings) + GOOGLE_API_KEY (for Google docs)</li>
+            <li>• <strong>Pro tip:</strong> Spreadsheets will have each sheet processed separately for better search</li>
           </ul>
         </div>
       </main>

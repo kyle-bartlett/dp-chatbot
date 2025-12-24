@@ -1,4 +1,4 @@
-# Anker DP Assistant
+# Anker Charging Knowledge Hub
 
 AI-powered chatbot for the Anker Demand Planning team. Built with Next.js and Claude AI with RAG (Retrieval Augmented Generation) for intelligent document search.
 

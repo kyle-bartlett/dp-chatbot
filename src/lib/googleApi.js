@@ -1,40 +1,22 @@
 /**
  * Google API integration for Sheets and Docs
  * Fetches content from Google Sheets and Google Docs
+ * Supports OAuth tokens from authenticated users
  */
 
 import { google } from 'googleapis'
 
-let authClient = null
-
 /**
- * Get authenticated Google API client
- * Uses service account or API key
+ * Create OAuth2 client with user's access token
+ * @param {string} accessToken - User's OAuth access token from session
  */
-function getAuth() {
-  if (authClient) return authClient
-
-  // Option 1: API Key (simplest, read-only, public files only)
-  if (process.env.GOOGLE_API_KEY) {
-    authClient = process.env.GOOGLE_API_KEY
-    return authClient
-  }
-
-  // Option 2: Service Account (for private files)
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
-    authClient = new google.auth.GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets.readonly',
-        'https://www.googleapis.com/auth/documents.readonly',
-        'https://www.googleapis.com/auth/drive.readonly'
-      ]
-    })
-    return authClient
-  }
-
-  throw new Error('No Google API credentials configured. Set GOOGLE_API_KEY or GOOGLE_SERVICE_ACCOUNT_KEY')
+function createOAuthClient(accessToken) {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  )
+  oauth2Client.setCredentials({ access_token: accessToken })
+  return oauth2Client
 }
 
 /**
@@ -69,21 +51,25 @@ export function detectDocType(url) {
 
 /**
  * Fetch content from a Google Sheet
+ * @param {string} spreadsheetId - Google Sheet ID
+ * @param {string} accessToken - User's OAuth access token
  */
-export async function fetchSpreadsheet(spreadsheetId) {
-  const auth = getAuth()
+export async function fetchSpreadsheet(spreadsheetId, accessToken) {
+  if (!accessToken) {
+    throw new Error('Authentication required. Please sign in with your Google account.')
+  }
+
+  const auth = createOAuthClient(accessToken)
 
   const sheets = google.sheets({
     version: 'v4',
-    auth: typeof auth === 'string' ? undefined : auth,
-    key: typeof auth === 'string' ? auth : undefined
+    auth
   })
 
   try {
     // Get spreadsheet metadata first
     const metadata = await sheets.spreadsheets.get({
-      spreadsheetId,
-      auth: typeof auth === 'string' ? undefined : auth
+      spreadsheetId
     })
 
     const title = metadata.data.properties?.title || 'Untitled Spreadsheet'
@@ -94,8 +80,7 @@ export async function fetchSpreadsheet(spreadsheetId) {
     for (const sheetName of sheetNames) {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: sheetName,
-        auth: typeof auth === 'string' ? undefined : auth
+        range: sheetName
       })
       allData[sheetName] = response.data.values || []
     }
@@ -109,26 +94,36 @@ export async function fetchSpreadsheet(spreadsheetId) {
     }
   } catch (error) {
     console.error('Error fetching spreadsheet:', error.message)
+    if (error.code === 403) {
+      throw new Error('Access denied. Make sure you have permission to view this spreadsheet.')
+    }
+    if (error.code === 404) {
+      throw new Error('Spreadsheet not found. Check the URL and try again.')
+    }
     throw new Error(`Failed to fetch spreadsheet: ${error.message}`)
   }
 }
 
 /**
  * Fetch content from a Google Doc
+ * @param {string} documentId - Google Doc ID
+ * @param {string} accessToken - User's OAuth access token
  */
-export async function fetchDocument(documentId) {
-  const auth = getAuth()
+export async function fetchDocument(documentId, accessToken) {
+  if (!accessToken) {
+    throw new Error('Authentication required. Please sign in with your Google account.')
+  }
+
+  const auth = createOAuthClient(accessToken)
 
   const docs = google.docs({
     version: 'v1',
-    auth: typeof auth === 'string' ? undefined : auth,
-    key: typeof auth === 'string' ? auth : undefined
+    auth
   })
 
   try {
     const response = await docs.documents.get({
-      documentId,
-      auth: typeof auth === 'string' ? undefined : auth
+      documentId
     })
 
     const doc = response.data
@@ -165,14 +160,22 @@ export async function fetchDocument(documentId) {
     }
   } catch (error) {
     console.error('Error fetching document:', error.message)
+    if (error.code === 403) {
+      throw new Error('Access denied. Make sure you have permission to view this document.')
+    }
+    if (error.code === 404) {
+      throw new Error('Document not found. Check the URL and try again.')
+    }
     throw new Error(`Failed to fetch document: ${error.message}`)
   }
 }
 
 /**
  * Fetch content from any Google URL
+ * @param {string} url - Google Sheets or Docs URL
+ * @param {string} accessToken - User's OAuth access token
  */
-export async function fetchGoogleContent(url) {
+export async function fetchGoogleContent(url, accessToken) {
   const docId = extractDocId(url)
   if (!docId) {
     throw new Error('Invalid Google document URL')
@@ -181,9 +184,9 @@ export async function fetchGoogleContent(url) {
   const docType = detectDocType(url)
 
   if (docType === 'spreadsheet') {
-    return await fetchSpreadsheet(docId)
+    return await fetchSpreadsheet(docId, accessToken)
   } else if (docType === 'document') {
-    return await fetchDocument(docId)
+    return await fetchDocument(docId, accessToken)
   } else {
     throw new Error('Unsupported document type. Only Google Sheets and Docs are supported.')
   }

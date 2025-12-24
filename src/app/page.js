@@ -11,7 +11,7 @@ export default function Home() {
     <AuthGuard>
       <div className="h-screen flex flex-col">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 shadow-sm">
+        <header className="bg-gradient-to-r from-white via-white to-[#00A0E9]/5 border-b border-gray-200 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <Logo />
 

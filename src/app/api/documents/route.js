@@ -5,6 +5,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid'
+import { auth } from '@/lib/auth'
 import { fetchGoogleContent, extractDocId, detectDocType } from '@/lib/googleApi'
 import { processDocument } from '@/lib/chunker'
 import { generateEmbeddings } from '@/lib/embeddings'
@@ -30,6 +31,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    // Get user session for OAuth token
+    const session = await auth()
+
     const body = await request.json()
     const { url, title: customTitle, content: manualContent, type: manualType } = body
 
@@ -46,6 +50,14 @@ export async function POST(request) {
         )
       }
 
+      // Require authentication for Google URLs
+      if (!session?.accessToken) {
+        return Response.json(
+          { error: 'Please sign in with your Google account to import Google documents' },
+          { status: 401 }
+        )
+      }
+
       const googleDocId = extractDocId(url)
       if (!googleDocId) {
         return Response.json(
@@ -55,7 +67,7 @@ export async function POST(request) {
       }
 
       docId = googleDocId
-      docData = await fetchGoogleContent(url)
+      docData = await fetchGoogleContent(url, session.accessToken)
       docData.url = url
     }
     // Option 2: Manual content

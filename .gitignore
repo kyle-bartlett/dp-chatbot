@@ -39,3 +39,15 @@ coverage/
 
 # Document data (contains embeddings and user content)
 data/
+.env*.local
+.env.production
+
+# Sensitive credential files - NEVER commit these
+client_secret_*.json
+*.serviceaccount.json
+dp-chatbot-*.json
+*-credentials.json
+
+# Screenshots and misc
+user-screenshots/
+chatgpt_conversation*.md

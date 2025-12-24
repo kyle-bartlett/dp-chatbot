@@ -2,7 +2,7 @@ import './globals.css'
 import Providers from '@/components/Providers'
 
 export const metadata = {
-  title: 'Anker DP Assistant | Demand Planning Knowledge Hub',
+  title: 'Anker Charging Knowledge Hub',
   description: 'AI-powered assistant for Anker Demand Planning team - CPFR, forecasting, and supply chain knowledge at your fingertips.',
 }
 
