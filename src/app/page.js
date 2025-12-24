@@ -13,7 +13,7 @@ export default function Home() {
       <AnkerBackground />
       <div className="h-screen flex flex-col relative">
         {/* Header */}
-        <header className="bg-[#151823]/90 backdrop-blur-md border-b border-[#00A0E9]/30 shadow-lg relative">
+        <header className="bg-[#2d2d2d]/90 backdrop-blur-md border-b border-[#00A0E9]/40 shadow-lg relative">
           {/* Subtle blue glow at top of header */}
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00A0E9]/50 to-transparent" />
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -57,7 +57,7 @@ export default function Home() {
         </main>
 
         {/* Footer */}
-        <footer className="bg-[#151823]/90 backdrop-blur-md border-t border-[#00A0E9]/30 py-2 px-4 relative">
+        <footer className="bg-[#2d2d2d]/90 backdrop-blur-md border-t border-[#00A0E9]/40 py-2 px-4 relative">
           {/* Subtle blue glow at bottom of footer */}
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#00A0E9]/50 to-transparent" />
           <p className="text-xs text-center text-gray-400">

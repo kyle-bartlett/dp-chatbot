@@ -55,7 +55,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 border-t border-[#00A0E9]/20 bg-transparent">
+    <form onSubmit={handleSubmit} className="p-4 border-t border-[#00A0E9]/30 bg-transparent">
       <div className="flex items-end gap-3 max-w-4xl mx-auto">
         {/* Attachment button (future feature) */}
         <button
@@ -76,7 +76,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
             placeholder="Ask about CPFR, forecasts, SOPs, SKUs, or any planning topic..."
             disabled={disabled}
             rows={1}
-            className="w-full px-4 py-3 bg-[#0d1421] border border-[#00A0E9]/30 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/50 focus:border-[#00A0E9] transition-all text-sm text-gray-200 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-[#2d2d2d] border border-[#00A0E9]/40 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/50 focus:border-[#00A0E9] transition-all text-sm text-gray-100 placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ minHeight: '48px', maxHeight: '120px' }}
           />
         </div>
@@ -92,9 +92,9 @@ export default function ChatInput({ onSendMessage, disabled }) {
       </div>
 
       {/* Helper text with keyboard shortcuts */}
-      <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-500">
+      <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-400">
         <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 bg-[#0d1421] border border-[#00A0E9]/30 rounded text-[10px] font-mono text-gray-300">/</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[#2d2d2d] border border-[#00A0E9]/40 rounded text-[10px] font-mono text-gray-200">/</kbd>
           <span>focus</span>
         </span>
         <span className="flex items-center gap-1">

@@ -17,7 +17,7 @@ export default function AuthGuard({ children }) {
   // If session is loading
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-[#00A0E9] animate-spin mx-auto mb-3 neon-glow-sm" />
           <p className="text-gray-400">Loading...</p>
@@ -29,8 +29,8 @@ export default function AuthGuard({ children }) {
   // If not authenticated and auth is enforced
   if (status === 'unauthenticated' && authConfigured) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
-        <div className="bg-[#151823] rounded-lg shadow-2xl p-8 w-full max-w-md text-center border border-[#00A0E9]/30 neon-glow-sm">
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
+        <div className="bg-[#2d2d2d] rounded-lg shadow-2xl p-8 w-full max-w-md text-center border border-[#00A0E9]/40 neon-glow-sm">
           <h1 className="text-2xl font-bold text-gray-100 mb-4">
             Sign In Required
           </h1>

@@ -19,58 +19,58 @@ function formatMessage(text) {
       // Headers
       if (line.startsWith('### ')) {
         if (inList) {
-          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
+          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
           listItems = []
           inList = false
         }
-        elements.push(<h4 key={idx} className="font-semibold text-gray-100 mt-3 mb-1">{line.slice(4)}</h4>)
+        elements.push(<h4 key={idx} className="font-semibold text-gray-100 mt-4 mb-2 text-base">{line.slice(4)}</h4>)
       } else if (line.startsWith('## ')) {
         if (inList) {
-          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
+          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
           listItems = []
           inList = false
         }
-        elements.push(<h3 key={idx} className="font-bold text-gray-100 mt-3 mb-2">{line.slice(3)}</h3>)
+        elements.push(<h3 key={idx} className="font-bold text-gray-100 mt-5 mb-3 text-lg border-b border-[#00A0E9]/20 pb-2">{line.slice(3)}</h3>)
       }
     // Bullet points
     else if (line.match(/^[\-\*•]\s/)) {
       inList = true
       const content = line.slice(2)
-      listItems.push(<li key={idx}>{formatInline(content)}</li>)
+      listItems.push(<li key={idx} className="leading-relaxed">{formatInline(content)}</li>)
     }
-    // Numbered lists
+        // Numbered lists
     else if (line.match(/^\d+\.\s/)) {
       if (inList && listItems.length > 0) {
-        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
-        listItems = []
+        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
+          listItems = []
       }
       inList = true
       const content = line.replace(/^\d+\.\s/, '')
-      listItems.push(<li key={idx}>{formatInline(content)}</li>)
+      listItems.push(<li key={idx} className="leading-relaxed">{formatInline(content)}</li>)
     }
     // Empty line
     else if (line.trim() === '') {
       if (inList) {
-        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
-        listItems = []
-        inList = false
-      }
-      elements.push(<div key={idx} className="h-2" />)
+      elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
+          listItems = []
+          inList = false
+        }
+      elements.push(<div key={idx} className="h-3" />)
     }
     // Regular text
     else {
       if (inList) {
-        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
-        listItems = []
-        inList = false
+        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
+          listItems = []
+          inList = false
       }
-      elements.push(<p key={idx} className="mb-1">{formatInline(line)}</p>)
+      elements.push(<p key={idx} className="mb-2.5 leading-relaxed">{formatInline(line)}</p>)
     }
   })
 
   // Close any open list
   if (inList && listItems.length > 0) {
-    elements.push(<ul key="list-final" className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
+    elements.push(<ul key="list-final" className="list-disc list-inside mb-3 space-y-1.5">{listItems}</ul>)
   }
 
   return elements
@@ -105,7 +105,7 @@ export default function MessageBubble({ message, isUser, sources }) {
   const [showSources, setShowSources] = useState(false)
 
   return (
-    <div className={`chat-bubble flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`chat-bubble flex gap-3 mb-6 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
       <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center shadow-md ${
         isUser
@@ -121,10 +121,10 @@ export default function MessageBubble({ message, isUser, sources }) {
 
       {/* Message bubble */}
       <div className={`max-w-[75%] ${isUser ? '' : ''}`}>
-        <div className={`px-4 py-3 rounded-lg shadow-lg ${
+        <div className={`px-4 py-3.5 rounded-lg shadow-lg ${
           isUser
             ? 'bg-gradient-to-br from-[#00A0E9] to-[#0090d9] text-white neon-glow-sm'
-            : 'bg-[#151823] text-gray-200 border border-[#00A0E9]/20'
+            : 'bg-[#2d2d2d] text-gray-100 border border-[#00A0E9]/30'
         }`}>
           <div className="text-sm leading-relaxed">
             {isUser ? message : formatMessage(message)}
@@ -144,7 +144,7 @@ export default function MessageBubble({ message, isUser, sources }) {
             </button>
 
             {showSources && (
-              <div className="mt-2 p-2 bg-[#0d1421] rounded-lg border border-[#00A0E9]/20 space-y-1">
+              <div className="mt-2 p-2 bg-[#252525] rounded-lg border border-[#00A0E9]/30 space-y-1">
                 {sources.map((source, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-xs">
                     <span className="w-4 h-4 bg-[#00A0E9]/20 text-[#00A0E9] rounded flex items-center justify-center font-medium border border-[#00A0E9]/30">

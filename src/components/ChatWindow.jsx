@@ -32,7 +32,7 @@ const STORAGE_KEY = 'anker-na-offline-planning-chat-history'
 function LoginRequiredOverlay() {
   return (
     <div className="absolute inset-0 bg-gradient-to-br from-[#00A0E9]/10 to-[#00d4aa]/10 backdrop-blur-sm flex items-center justify-center z-10">
-      <div className="bg-[#151823] rounded-lg shadow-2xl p-8 max-w-md mx-4 text-center border border-[#00A0E9]/30 neon-glow-sm">
+      <div className="bg-[#2d2d2d] rounded-lg shadow-2xl p-8 max-w-md mx-4 text-center border border-[#00A0E9]/40 neon-glow-sm">
         <div className="mb-6">
           <pre className="text-[#00A0E9] text-xs font-mono leading-tight inline-block text-left">
 {`    ┌─────────────────────────┐
@@ -182,12 +182,12 @@ export default function ChatWindow() {
   return (
     <div className="flex flex-col h-full relative">
       {/* Chat container with distinct lighter background */}
-      <div className="flex flex-col h-full bg-[#1e2335]/95 backdrop-blur-md border border-[#00A0E9]/30 rounded-lg shadow-2xl neon-glow-sm">
+      <div className="flex flex-col h-full bg-[#353535]/95 backdrop-blur-md border border-[#00A0E9]/40 rounded-lg shadow-2xl neon-glow-sm">
         {/* Show login overlay if not authenticated */}
         {!session?.user && <LoginRequiredOverlay />}
         {/* Chat toolbar */}
         {messages.length > 2 && (
-          <div className="px-4 py-2 border-b border-[#00A0E9]/20 bg-[#1a1d2e]/80 backdrop-blur-sm">
+          <div className="px-4 py-2 border-b border-[#00A0E9]/30 bg-[#2d2d2d]/80 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto flex justify-end gap-2">
             <button
               onClick={handleExportChat}
@@ -211,7 +211,7 @@ export default function ChatWindow() {
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="max-w-4xl mx-auto space-y-6">
           {messages.map((msg) => (
             <MessageBubble
               key={msg.id}
@@ -237,7 +237,7 @@ export default function ChatWindow() {
                 <button
                   key={idx}
                   onClick={() => handleQuickAction(action.query)}
-                  className="flex items-center gap-2 px-3 py-2 bg-[#151823] border border-[#00A0E9]/30 rounded-lg text-sm text-gray-300 hover:border-[#00A0E9] hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 transition-all hover:neon-glow-sm"
+                  className="flex items-center gap-2 px-3 py-2 bg-[#2d2d2d] border border-[#00A0E9]/40 rounded-lg text-sm text-gray-200 hover:border-[#00A0E9] hover:text-[#00A0E9] hover:bg-[#00A0E9]/15 transition-all hover:neon-glow-sm"
                 >
                   <action.icon className="w-4 h-4" />
                   {action.label}
