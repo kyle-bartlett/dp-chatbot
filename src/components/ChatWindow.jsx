@@ -188,9 +188,9 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full max-h-full relative">
       {/* Chat container with Christmas border colors */}
-      <div className="flex flex-col h-full bg-[#353535]/95 backdrop-blur-md border-2 border-red-500/30 rounded-lg shadow-2xl relative overflow-hidden">
+      <div className="flex flex-col h-full max-h-full bg-[#353535]/95 backdrop-blur-md border-2 border-red-500/30 rounded-xl shadow-2xl relative overflow-hidden">
         {/* Decorative Christmas corner ornaments */}
         <div className="absolute top-2 left-2 text-2xl opacity-30">🎄</div>
         <div className="absolute top-2 right-2 text-2xl opacity-30">❄️</div>

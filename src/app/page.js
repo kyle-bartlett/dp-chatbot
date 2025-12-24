@@ -51,9 +51,11 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Main chat area */}
-        <main className="flex-1 overflow-hidden p-2">
-          <ChatWindow />
+        {/* Main chat area - constrained to show background */}
+        <main className="flex-1 overflow-hidden p-4 md:p-8">
+          <div className="max-w-4xl mx-auto h-full max-h-[calc(100vh-180px)]">
+            <ChatWindow />
+          </div>
         </main>
 
         {/* Footer */}
