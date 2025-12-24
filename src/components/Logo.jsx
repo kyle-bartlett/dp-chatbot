@@ -1,6 +1,7 @@
 'use client'
 
 import { Zap, Battery } from 'lucide-react'
+import SantaHat from './SantaHat'
 
 export default function Logo() {
   return (
@@ -9,6 +10,10 @@ export default function Logo() {
       <div className="relative">
         <div className="w-12 h-12 bg-gradient-to-br from-[#00A0E9] to-[#00d4aa] rounded-lg flex items-center justify-center shadow-lg neon-glow-sm">
           <Zap className="w-7 h-7 text-white" strokeWidth={2.5} />
+        </div>
+        {/* Santa hat on the logo! */}
+        <div className="absolute -top-4 -left-2 transform -rotate-12">
+          <SantaHat size={28} />
         </div>
         {/* Small battery indicator */}
         <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#151823] border border-[#00A0E9]/40 rounded-full flex items-center justify-center shadow-md">
