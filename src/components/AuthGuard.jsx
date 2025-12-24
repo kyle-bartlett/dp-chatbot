@@ -35,7 +35,7 @@ export default function AuthGuard({ children }) {
             Sign In Required
           </h1>
           <p className="text-gray-500 mb-6">
-            Please sign in with your Anker account to access the Anker Charging Knowledge Hub.
+            Please sign in with your Anker account to access the Anker N.A. Offline Planning Assistant.
           </p>
           <button
             onClick={() => signIn('google')}

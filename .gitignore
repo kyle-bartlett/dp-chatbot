@@ -51,3 +51,9 @@ dp-chatbot-*.json
 # Screenshots and misc
 user-screenshots/
 chatgpt_conversation*.md
+
+# gemini-cli settings
+.gemini/
+
+# GitHub App credentials
+gha-creds-*.json

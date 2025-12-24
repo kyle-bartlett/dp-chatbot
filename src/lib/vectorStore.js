@@ -11,6 +11,8 @@ import { supabase } from './supabaseClient'
 export async function addDocument(doc) {
   const { id, title, type, url, metadata } = doc
   
+  console.log('Adding document with ID:', id, 'Type:', typeof id)
+  
   const { data, error } = await supabase
     .from('documents')
     .upsert({
@@ -26,9 +28,17 @@ export async function addDocument(doc) {
 
   if (error) {
     console.error('Error adding document:', error)
+    console.error('Document ID:', id)
+    console.error('Document ID type:', typeof id)
     throw error
   }
 
+  if (!data) {
+    console.error('No data returned from upsert')
+    throw new Error('Failed to save document: no data returned')
+  }
+
+  console.log('Document saved successfully:', data.id)
   return data
 }
 
@@ -74,6 +84,21 @@ export async function addChunks(chunks, embeddings) {
 
   const docId = chunks[0].documentId
 
+  // Verify the document exists before inserting chunks
+  const { data: existingDoc, error: checkError } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('id', docId)
+    .single()
+
+  if (checkError || !existingDoc) {
+    console.error('Document not found in database:', docId)
+    console.error('Check error:', checkError)
+    throw new Error(`Document with ID "${docId}" does not exist in the database. Please save the document first.`)
+  }
+
+  console.log(`Verified document exists: ${docId}`)
+
   // First, delete existing chunks for this document to avoid duplicates/stale chunks
   const { error: deleteError } = await supabase
     .from('document_chunks')
@@ -98,14 +123,23 @@ export async function addChunks(chunks, embeddings) {
     }
   }))
 
+  console.log(`Inserting ${rows.length} chunks for document ${docId}`)
+  console.log(`First chunk document_id: ${rows[0]?.document_id}`)
+  console.log(`Document ID type: ${typeof docId}, value: ${docId}`)
+
   const { error: insertError } = await supabase
     .from('document_chunks')
     .insert(rows)
 
   if (insertError) {
     console.error('Error inserting chunks:', insertError)
+    console.error('Document ID used:', docId)
+    console.error('Document ID type:', typeof docId)
+    console.error('First row document_id:', rows[0]?.document_id)
     throw insertError
   }
+
+  console.log(`Successfully inserted ${rows.length} chunks`)
 }
 
 /**

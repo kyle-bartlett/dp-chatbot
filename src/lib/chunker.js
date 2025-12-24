@@ -5,6 +5,8 @@
 
 const DEFAULT_CHUNK_SIZE = 1000  // characters
 const DEFAULT_OVERLAP = 200      // characters
+// Embedding models cap input tokens (~8k). Use a conservative char limit for sheets.
+const DEFAULT_MAX_CHUNK_CHARS = 12000
 
 /**
  * Split text into overlapping chunks
@@ -75,38 +77,69 @@ export function chunkText(text, options = {}) {
  * Chunk a Google Sheet into rows/sections
  */
 export function chunkSpreadsheet(data, options = {}) {
-  const { sheetName = 'Sheet', includeHeaders = true } = options
+  const { sheetName = 'Sheet', includeHeaders = true, maxChunkChars = DEFAULT_MAX_CHUNK_CHARS } = options
 
   if (!data || data.length === 0) {
     return []
   }
 
   const chunks = []
-  const headers = data[0] || []
+  const headers = (data[0] || []).map(h => String(h || '').trim()).filter(h => h.length > 0)
 
-  // Process in groups of rows
+  // Process in groups of rows with a hard size cap
   const rowsPerChunk = 10
-  for (let i = 1; i < data.length; i += rowsPerChunk) {
-    const rowGroup = data.slice(i, i + rowsPerChunk)
+  let currentChunk = ''
+  let currentRows = 0
 
-    let chunkText = `[${sheetName}]\n`
+  const startChunk = () => {
+    let base = `[${sheetName}]\n`
     if (includeHeaders && headers.length > 0) {
-      chunkText += `Headers: ${headers.join(' | ')}\n\n`
+      base += `Headers: ${headers.join(' | ')}\n\n`
     }
-
-    rowGroup.forEach((row, idx) => {
-      const rowNum = i + idx
-      const rowData = row.map((cell, cellIdx) => {
-        const header = headers[cellIdx] || `Column ${cellIdx + 1}`
-        return `${header}: ${cell || '(empty)'}`
-      }).join(', ')
-      chunkText += `Row ${rowNum}: ${rowData}\n`
-    })
-
-    chunks.push(chunkText.trim())
+    currentChunk = base
+    currentRows = 0
   }
 
-  return chunks
+  startChunk()
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i]
+    if (!row || !Array.isArray(row)) {
+      continue // Skip invalid rows
+    }
+
+    const rowData = row.map((cell, cellIdx) => {
+      const header = headers[cellIdx] || `Column ${cellIdx + 1}`
+      // Convert cell to string and handle null/undefined
+      const cellValue = cell === null || cell === undefined ? '(empty)' : String(cell).trim()
+      return `${header}: ${cellValue || '(empty)'}`
+    }).join(', ')
+    
+    const rowLine = `Row ${i}: ${rowData}\n`
+
+    // If adding this row would exceed the cap or row count, flush current chunk first.
+    if (
+      currentRows > 0 &&
+      (currentChunk.length + rowLine.length > maxChunkChars || currentRows >= rowsPerChunk)
+    ) {
+      const trimmed = currentChunk.trim()
+      if (trimmed.length > 0) {
+        chunks.push(trimmed)
+      }
+      startChunk()
+    }
+
+    currentChunk += rowLine
+    currentRows += 1
+  }
+
+  const finalChunk = currentChunk.trim()
+  if (finalChunk.length > 0) {
+    chunks.push(finalChunk)
+  }
+
+  // Filter out any empty chunks
+  return chunks.filter(chunk => chunk && chunk.trim().length > 0)
 }
 
 /**
@@ -118,21 +151,32 @@ export function processDocument(doc) {
 
   if (type === 'spreadsheet') {
     // Content should be an array of arrays (rows)
-    chunks = chunkSpreadsheet(content, { sheetName: title })
+    if (Array.isArray(content)) {
+      chunks = chunkSpreadsheet(content, { sheetName: title })
+    } else {
+      console.warn('Spreadsheet content is not an array:', typeof content)
+      chunks = []
+    }
   } else {
     // Text content (docs, etc.)
-    chunks = chunkText(typeof content === 'string' ? content : JSON.stringify(content))
+    const textContent = typeof content === 'string' 
+      ? content 
+      : (content ? JSON.stringify(content) : '')
+    chunks = chunkText(textContent)
   }
 
-  return chunks.map((text, index) => ({
-    id: `${id}-chunk-${index}`,
-    documentId: id,
-    documentTitle: title,
-    documentType: type,
-    documentUrl: url,
-    chunkIndex: index,
-    totalChunks: chunks.length,
-    text,
-    createdAt: new Date().toISOString()
-  }))
+  // Filter out empty chunks and ensure all have valid text
+  return chunks
+    .filter(text => text && typeof text === 'string' && text.trim().length > 0)
+    .map((text, index) => ({
+      id: `${id}-chunk-${index}`,
+      documentId: id,
+      documentTitle: title || 'Untitled',
+      documentType: type || 'document',
+      documentUrl: url || '',
+      chunkIndex: index,
+      totalChunks: chunks.length,
+      text: text.trim(),
+      createdAt: new Date().toISOString()
+    }))
 }

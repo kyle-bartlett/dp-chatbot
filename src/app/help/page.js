@@ -83,9 +83,9 @@ const EXAMPLE_QUESTIONS = [
 
 export default function HelpPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-white/60 via-white/40 to-transparent">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
+      <header className="bg-white/70 backdrop-blur border-b border-white/60 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
@@ -107,10 +107,10 @@ export default function HelpPage() {
             <HelpCircle className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-3">
-            Welcome to Anker Charging Knowledge Hub
+            Welcome to Anker N.A. Offline Planning Assistant
           </h1>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Your AI-powered knowledge hub for demand planning. Get instant answers about CPFR, forecasting, SOPs, and more.
+            Your AI-powered knowledge hub for offline planning. Get instant answers about CPFR, forecasting, SOPs, and more.
           </p>
         </div>
 
@@ -202,7 +202,7 @@ export default function HelpPage() {
         {/* Need Help */}
         <section className="text-center py-8">
           <p className="text-gray-500 mb-4">
-            Need additional help? Contact the DP team or your system administrator.
+            Need additional help? Contact the planning team or your system administrator.
           </p>
           <Link
             href="/"

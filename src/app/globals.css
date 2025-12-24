@@ -5,12 +5,39 @@
   --anker-dark: #1a1a2e;
   --anker-light: #f8f9fa;
   --anker-accent: #00d4aa;
+  --ink-900: #0f172a;
+  --mist-50: #f7f9fc;
+  --mist-100: #edf2f7;
+  --seafoam-100: #e7f6f1;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  background-color: var(--mist-50);
   min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background:
+    radial-gradient(1000px 500px at 8% -10%, rgba(0, 160, 233, 0.20), transparent 60%),
+    radial-gradient(900px 540px at 95% 10%, rgba(0, 212, 170, 0.18), transparent 55%),
+    linear-gradient(160deg, var(--mist-50) 0%, var(--mist-100) 45%, var(--seafoam-100) 100%);
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.6;
+  background-image:
+    radial-gradient(1px 1px at 30px 40px, rgba(15, 23, 42, 0.06) 0, rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+    radial-gradient(1px 1px at 90px 80px, rgba(0, 160, 233, 0.05) 0, rgba(0, 160, 233, 0.05) 1px, transparent 1px);
+  background-size: 140px 140px, 220px 220px;
 }
 
 /* Custom scrollbar */

@@ -17,8 +17,8 @@ import {
   Info
 } from 'lucide-react'
 
-const STORAGE_KEY = 'anker-dp-chat-history'
-const SETTINGS_KEY = 'anker-dp-settings'
+const STORAGE_KEY = 'anker-na-offline-planning-chat-history'
+const SETTINGS_KEY = 'anker-na-offline-planning-settings'
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
@@ -104,9 +104,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-b from-white/60 via-white/40 to-transparent dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <header className="bg-white/70 dark:bg-gray-800/80 backdrop-blur border-b border-white/60 dark:border-gray-700 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
@@ -245,7 +245,7 @@ export default function SettingsPage() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
               <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-                Anker Demand Planning Assistant
+                Anker N.A. Offline Planning Assistant
                 <br />
                 Internal Use Only
               </p>

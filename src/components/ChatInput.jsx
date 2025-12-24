@@ -73,7 +73,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
             value={message}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about CPFR, forecasts, SOPs, SKUs, or any DP topic..."
+            placeholder="Ask about CPFR, forecasts, SOPs, SKUs, or any planning topic..."
             disabled={disabled}
             rows={1}
             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/30 focus:border-[#00A0E9] transition-all text-sm placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"

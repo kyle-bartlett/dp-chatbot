@@ -7,7 +7,7 @@ import TypingIndicator from './TypingIndicator'
 import ChatInput from './ChatInput'
 import { FileText, TrendingUp, Package, BookOpen, Search, Trash2, Download, Lock } from 'lucide-react'
 
-const WELCOME_MESSAGE = `Hello! I'm your Anker Demand Planning Assistant. I'm here to help you with:
+const WELCOME_MESSAGE = `Hello! I'm your Anker N.A. Offline Planning Assistant. I'm here to help you with:
 
 • **CPFR processes** - Walmart, Target, BBY, Costco, Apple procedures
 • **Forecasting** - Logic, ladders, and refresh processes
@@ -26,7 +26,7 @@ const QUICK_ACTIONS = [
   { icon: Search, label: 'SKU Lookup', query: 'Look up information for SKU A2140' },
 ]
 
-const STORAGE_KEY = 'anker-dp-chat-history'
+const STORAGE_KEY = 'anker-na-offline-planning-chat-history'
 
 // Fun ASCII-style login prompt
 function LoginRequiredOverlay() {
@@ -49,7 +49,7 @@ function LoginRequiredOverlay() {
           </pre>
         </div>
         <p className="text-gray-600 mb-4">
-          Sign in with your <span className="font-semibold text-[#00A0E9]">@anker.com</span> account to access the Demand Planning Assistant
+          Sign in with your <span className="font-semibold text-[#00A0E9]">@anker.com</span> account to access the Offline Planning Assistant
         </p>
         <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
           <Lock className="w-4 h-4" />
@@ -180,7 +180,7 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white relative">
+    <div className="flex flex-col h-full bg-white/60 backdrop-blur-sm relative">
       {/* Show login overlay if not authenticated */}
       {!session?.user && <LoginRequiredOverlay />}
       {/* Chat toolbar */}
