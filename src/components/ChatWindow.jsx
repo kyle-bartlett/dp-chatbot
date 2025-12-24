@@ -7,7 +7,7 @@ import TypingIndicator from './TypingIndicator'
 import ChatInput from './ChatInput'
 import { FileText, TrendingUp, Package, BookOpen, Search, Trash2, Download, Lock } from 'lucide-react'
 
-const WELCOME_MESSAGE = `Hello! I'm your Anker N.A. Offline Planning Assistant. I'm here to help you with:
+const WELCOME_MESSAGE = `Hello! I'm your Anker Charging Offline Planning Assistant. I'm here to help you with:
 
 • **CPFR processes** - Walmart, Target, BBY, Costco, Apple procedures
 • **Forecasting** - Logic, ladders, and refresh processes
@@ -31,8 +31,8 @@ const STORAGE_KEY = 'anker-na-offline-planning-chat-history'
 // Fun ASCII-style login prompt
 function LoginRequiredOverlay() {
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-[#00A0E9]/5 to-[#00d4aa]/5 backdrop-blur-sm flex items-center justify-center z-10">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center border border-gray-100">
+    <div className="absolute inset-0 bg-gradient-to-br from-[#00A0E9]/10 to-[#00d4aa]/10 backdrop-blur-sm flex items-center justify-center z-10">
+      <div className="bg-[#151823] rounded-lg shadow-2xl p-8 max-w-md mx-4 text-center border border-[#00A0E9]/30 neon-glow-sm">
         <div className="mb-6">
           <pre className="text-[#00A0E9] text-xs font-mono leading-tight inline-block text-left">
 {`    ┌─────────────────────────┐
@@ -48,7 +48,7 @@ function LoginRequiredOverlay() {
     └─────────────────────────┘`}
           </pre>
         </div>
-        <p className="text-gray-600 mb-4">
+        <p className="text-gray-300 mb-4">
           Sign in with your <span className="font-semibold text-[#00A0E9]">@anker.com</span> account to access the Offline Planning Assistant
         </p>
         <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
@@ -174,22 +174,22 @@ export default function ChatWindow() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `anker-dp-chat-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `anker-na-offline-planning-chat-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   return (
-    <div className="flex flex-col h-full bg-white/60 backdrop-blur-sm relative">
+    <div className="flex flex-col h-full bg-transparent relative">
       {/* Show login overlay if not authenticated */}
       {!session?.user && <LoginRequiredOverlay />}
       {/* Chat toolbar */}
       {messages.length > 2 && (
-        <div className="px-4 py-2 border-b border-gray-100 bg-white/50 backdrop-blur-sm">
+        <div className="px-4 py-2 border-b border-[#00A0E9]/20 bg-[#151823]/60 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto flex justify-end gap-2">
             <button
               onClick={handleExportChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-[#00A0E9] hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 rounded-lg transition-all hover:neon-glow-sm"
               title="Export chat"
             >
               <Download className="w-3.5 h-3.5" />
@@ -197,7 +197,7 @@ export default function ChatWindow() {
             </button>
             <button
               onClick={handleClearHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
               title="Clear history"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -229,13 +229,13 @@ export default function ChatWindow() {
       {messages.length <= 2 && !isLoading && (
         <div className="px-4 pb-2">
           <div className="max-w-4xl mx-auto">
-            <p className="text-xs text-gray-500 mb-2 font-medium">Quick questions:</p>
+            <p className="text-xs text-gray-400 mb-2 font-medium">Quick questions:</p>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map((action, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleQuickAction(action.query)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 hover:border-[#00A0E9] hover:text-[#00A0E9] transition-colors shadow-sm"
+                  className="flex items-center gap-2 px-3 py-2 bg-[#151823] border border-[#00A0E9]/30 rounded-lg text-sm text-gray-300 hover:border-[#00A0E9] hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 transition-all hover:neon-glow-sm"
                 >
                   <action.icon className="w-4 h-4" />
                   {action.label}

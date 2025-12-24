@@ -16,22 +16,22 @@ function formatMessage(text) {
   let listItems = []
 
   lines.forEach((line, idx) => {
-    // Headers
-    if (line.startsWith('### ')) {
-      if (inList) {
-        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
-        listItems = []
-        inList = false
+      // Headers
+      if (line.startsWith('### ')) {
+        if (inList) {
+          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
+          listItems = []
+          inList = false
+        }
+        elements.push(<h4 key={idx} className="font-semibold text-gray-100 mt-3 mb-1">{line.slice(4)}</h4>)
+      } else if (line.startsWith('## ')) {
+        if (inList) {
+          elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
+          listItems = []
+          inList = false
+        }
+        elements.push(<h3 key={idx} className="font-bold text-gray-100 mt-3 mb-2">{line.slice(3)}</h3>)
       }
-      elements.push(<h4 key={idx} className="font-semibold text-gray-900 mt-3 mb-1">{line.slice(4)}</h4>)
-    } else if (line.startsWith('## ')) {
-      if (inList) {
-        elements.push(<ul key={`list-${idx}`} className="list-disc list-inside mb-2 space-y-1">{listItems}</ul>)
-        listItems = []
-        inList = false
-      }
-      elements.push(<h3 key={idx} className="font-bold text-gray-900 mt-3 mb-2">{line.slice(3)}</h3>)
-    }
     // Bullet points
     else if (line.match(/^[\-\*•]\s/)) {
       inList = true
@@ -92,7 +92,7 @@ function formatInline(text) {
       const codeParts = part.split(/(`[^`]+`)/g)
       return codeParts.map((cp, cidx) => {
         if (cp.startsWith('`') && cp.endsWith('`')) {
-          return <code key={`${idx}-${cidx}`} className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{cp.slice(1, -1)}</code>
+          return <code key={`${idx}-${cidx}`} className="bg-[#0d1421] border border-[#00A0E9]/30 px-1 py-0.5 rounded text-sm font-mono text-[#00A0E9]">{cp.slice(1, -1)}</code>
         }
         return cp
       })
@@ -121,10 +121,10 @@ export default function MessageBubble({ message, isUser, sources }) {
 
       {/* Message bubble */}
       <div className={`max-w-[75%] ${isUser ? '' : ''}`}>
-        <div className={`px-4 py-3 rounded-chat shadow-sm ${
+        <div className={`px-4 py-3 rounded-lg shadow-lg ${
           isUser
-            ? 'bg-gradient-to-br from-[#00A0E9] to-[#0090d9] text-white rounded-tr-md'
-            : 'bg-white text-gray-800 rounded-tl-md border border-gray-100'
+            ? 'bg-gradient-to-br from-[#00A0E9] to-[#0090d9] text-white neon-glow-sm'
+            : 'bg-[#151823] text-gray-200 border border-[#00A0E9]/20'
         }`}>
           <div className="text-sm leading-relaxed">
             {isUser ? message : formatMessage(message)}
@@ -136,7 +136,7 @@ export default function MessageBubble({ message, isUser, sources }) {
           <div className="mt-1">
             <button
               onClick={() => setShowSources(!showSources)}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#00A0E9] transition-colors"
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#00A0E9] transition-colors"
             >
               <FileText className="w-3 h-3" />
               <span>{sources.length} source{sources.length > 1 ? 's' : ''} used</span>
@@ -144,25 +144,25 @@ export default function MessageBubble({ message, isUser, sources }) {
             </button>
 
             {showSources && (
-              <div className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-100 space-y-1">
+              <div className="mt-2 p-2 bg-[#0d1421] rounded-lg border border-[#00A0E9]/20 space-y-1">
                 {sources.map((source, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-xs">
-                    <span className="w-4 h-4 bg-[#00A0E9]/10 text-[#00A0E9] rounded flex items-center justify-center font-medium">
+                    <span className="w-4 h-4 bg-[#00A0E9]/20 text-[#00A0E9] rounded flex items-center justify-center font-medium border border-[#00A0E9]/30">
                       {idx + 1}
                     </span>
-                    <span className="text-gray-700 flex-1 truncate">{source.title}</span>
+                    <span className="text-gray-300 flex-1 truncate">{source.title}</span>
                     {source.url && (
                       <a
                         href={source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-gray-400 hover:text-[#00A0E9]"
+                        className="text-gray-500 hover:text-[#00A0E9] transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
                     {source.score && (
-                      <span className="text-gray-400">
+                      <span className="text-gray-500">
                         {Math.round(source.score * 100)}%
                       </span>
                     )}

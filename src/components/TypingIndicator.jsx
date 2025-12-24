@@ -11,11 +11,11 @@ export default function TypingIndicator() {
       </div>
 
       {/* Typing bubble */}
-      <div className="bg-white px-4 py-3 rounded-chat rounded-tl-md shadow-sm border border-gray-100">
+      <div className="bg-[#151823] px-4 py-3 rounded-lg shadow-lg border border-[#00A0E9]/20">
         <div className="flex gap-1.5 items-center h-5">
-          <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div>
-          <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div>
-          <div className="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div>
+          <div className="typing-dot w-2 h-2 bg-[#00A0E9] rounded-full"></div>
+          <div className="typing-dot w-2 h-2 bg-[#00A0E9] rounded-full"></div>
+          <div className="typing-dot w-2 h-2 bg-[#00A0E9] rounded-full"></div>
         </div>
       </div>
     </div>

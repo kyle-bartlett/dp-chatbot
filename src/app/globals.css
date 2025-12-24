@@ -2,18 +2,21 @@
 
 :root {
   --anker-blue: #00A0E9;
-  --anker-dark: #1a1a2e;
+  --anker-blue-glow: #00A0E9;
+  --anker-dark: #0a0a0f;
+  --anker-dark-blue: #0d1421;
+  --anker-surface: #151823;
   --anker-light: #f8f9fa;
   --anker-accent: #00d4aa;
-  --ink-900: #0f172a;
-  --mist-50: #f7f9fc;
-  --mist-100: #edf2f7;
-  --seafoam-100: #e7f6f1;
+  --anker-text-primary: #ffffff;
+  --anker-text-secondary: #a0a0b0;
+  --anker-border: rgba(0, 160, 233, 0.2);
 }
 
 body {
-  background-color: var(--mist-50);
+  background-color: var(--anker-dark);
   min-height: 100vh;
+  color: var(--anker-text-primary);
 }
 
 .app-shell {
@@ -22,9 +25,10 @@ body {
   isolation: isolate;
   overflow-x: hidden;
   background:
-    radial-gradient(1000px 500px at 8% -10%, rgba(0, 160, 233, 0.20), transparent 60%),
-    radial-gradient(900px 540px at 95% 10%, rgba(0, 212, 170, 0.18), transparent 55%),
-    linear-gradient(160deg, var(--mist-50) 0%, var(--mist-100) 45%, var(--seafoam-100) 100%);
+    radial-gradient(1200px 600px at 10% -5%, rgba(0, 160, 233, 0.15), transparent 50%),
+    radial-gradient(1000px 500px at 90% 15%, rgba(0, 160, 233, 0.12), transparent 50%),
+    radial-gradient(800px 400px at 50% 80%, rgba(0, 160, 233, 0.08), transparent 50%),
+    linear-gradient(180deg, var(--anker-dark) 0%, var(--anker-dark-blue) 50%, var(--anker-dark) 100%);
 }
 
 .app-shell::before {
@@ -33,29 +37,46 @@ body {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.4;
   background-image:
-    radial-gradient(1px 1px at 30px 40px, rgba(15, 23, 42, 0.06) 0, rgba(15, 23, 42, 0.06) 1px, transparent 1px),
-    radial-gradient(1px 1px at 90px 80px, rgba(0, 160, 233, 0.05) 0, rgba(0, 160, 233, 0.05) 1px, transparent 1px);
-  background-size: 140px 140px, 220px 220px;
+    radial-gradient(2px 2px at 40px 50px, rgba(0, 160, 233, 0.15) 0, rgba(0, 160, 233, 0.15) 2px, transparent 2px),
+    radial-gradient(1px 1px at 100px 100px, rgba(0, 160, 233, 0.1) 0, rgba(0, 160, 233, 0.1) 1px, transparent 1px);
+  background-size: 200px 200px, 300px 300px;
+}
+
+.app-shell::after {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to top, 
+    rgba(0, 160, 233, 0.1) 0%,
+    rgba(0, 160, 233, 0.05) 30%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to top, black 0%, transparent 100%);
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: rgba(0, 160, 233, 0.4);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: rgba(0, 160, 233, 0.6);
 }
 
 /* Chat bubble animations */
@@ -106,4 +127,21 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Neon glow effects */
+.neon-glow {
+  box-shadow: 0 0 10px rgba(0, 160, 233, 0.5),
+              0 0 20px rgba(0, 160, 233, 0.3),
+              0 0 30px rgba(0, 160, 233, 0.2);
+}
+
+.neon-glow-sm {
+  box-shadow: 0 0 5px rgba(0, 160, 233, 0.4),
+              0 0 10px rgba(0, 160, 233, 0.2);
+}
+
+/* Sharp corners utility */
+.sharp-corner {
+  border-radius: 0.5rem;
 }

@@ -18,10 +18,10 @@ export default function Logo() {
 
       {/* Text */}
       <div className="flex flex-col">
-        <span className="text-xl font-bold text-gray-800 tracking-tight">
-          Anker <span className="gradient-text">N.A.</span>
+        <span className="text-xl font-bold text-gray-100 tracking-tight">
+          Anker <span className="gradient-text">Charging</span>
         </span>
-        <span className="text-xs text-gray-500 font-medium -mt-0.5">
+        <span className="text-xs text-gray-400 font-medium -mt-0.5">
           Offline Planning Assistant
         </span>
       </div>

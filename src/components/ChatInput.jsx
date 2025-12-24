@@ -55,12 +55,12 @@ export default function ChatInput({ onSendMessage, disabled }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 bg-white/80 backdrop-blur-sm">
+    <form onSubmit={handleSubmit} className="p-4 border-t border-[#00A0E9]/20 bg-[#151823]/80 backdrop-blur-md">
       <div className="flex items-end gap-3 max-w-4xl mx-auto">
         {/* Attachment button (future feature) */}
         <button
           type="button"
-          className="flex-shrink-0 p-2.5 text-gray-400 hover:text-[#00A0E9] hover:bg-gray-100 rounded-xl transition-colors"
+          className="flex-shrink-0 p-2.5 text-gray-400 hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 rounded-lg transition-all hover:neon-glow-sm"
           title="Attach document (coming soon)"
         >
           <Paperclip className="w-5 h-5" />
@@ -76,7 +76,7 @@ export default function ChatInput({ onSendMessage, disabled }) {
             placeholder="Ask about CPFR, forecasts, SOPs, SKUs, or any planning topic..."
             disabled={disabled}
             rows={1}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/30 focus:border-[#00A0E9] transition-all text-sm placeholder:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-[#0d1421] border border-[#00A0E9]/30 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#00A0E9]/50 focus:border-[#00A0E9] transition-all text-sm text-gray-200 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ minHeight: '48px', maxHeight: '120px' }}
           />
         </div>
@@ -85,28 +85,28 @@ export default function ChatInput({ onSendMessage, disabled }) {
         <button
           type="submit"
           disabled={!message.trim() || disabled}
-          className="flex-shrink-0 p-3 bg-gradient-to-r from-[#00A0E9] to-[#00d4aa] text-white rounded-xl shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-md transition-all"
+          className="flex-shrink-0 p-3 bg-gradient-to-r from-[#00A0E9] to-[#00d4aa] text-white rounded-lg shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg transition-all neon-glow-sm hover:neon-glow"
         >
           <Send className="w-5 h-5" />
         </button>
       </div>
 
       {/* Helper text with keyboard shortcuts */}
-      <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-400">
+      <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-500">
         <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">/</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[#0d1421] border border-[#00A0E9]/30 rounded text-[10px] font-mono text-gray-300">/</kbd>
           <span>focus</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">Enter</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[#0d1421] border border-[#00A0E9]/30 rounded text-[10px] font-mono text-gray-300">Enter</kbd>
           <span>send</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">Shift+Enter</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[#0d1421] border border-[#00A0E9]/30 rounded text-[10px] font-mono text-gray-300">Shift+Enter</kbd>
           <span>new line</span>
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] font-mono">Esc</kbd>
+          <kbd className="px-1.5 py-0.5 bg-[#0d1421] border border-[#00A0E9]/30 rounded text-[10px] font-mono text-gray-300">Esc</kbd>
           <span>blur</span>
         </span>
       </div>

@@ -8,8 +8,8 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata = {
-  title: 'Anker N.A. Offline Planning Assistant',
-  description: 'AI-powered assistant for Anker North America planning teams - CPFR, forecasting, supply chain, and training knowledge at your fingertips.',
+  title: 'Anker Charging Offline Planning Assistant',
+  description: 'AI-powered assistant for Anker Charging planning teams - CPFR, forecasting, supply chain, and training knowledge at your fingertips.',
 }
 
 export default function RootLayout({ children }) {

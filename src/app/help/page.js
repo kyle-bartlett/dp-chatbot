@@ -107,7 +107,7 @@ export default function HelpPage() {
             <HelpCircle className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-3">
-            Welcome to Anker N.A. Offline Planning Assistant
+            Welcome to Anker Charging Offline Planning Assistant
           </h1>
           <p className="text-gray-500 max-w-xl mx-auto">
             Your AI-powered knowledge hub for offline planning. Get instant answers about CPFR, forecasting, SOPs, and more.

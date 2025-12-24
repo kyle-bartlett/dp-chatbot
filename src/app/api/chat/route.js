@@ -6,7 +6,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const BASE_SYSTEM_PROMPT = `You are the Anker N.A. Offline Planning Assistant, an AI helper for the Anker North America planning teams. Your role is to help team members with:
+const BASE_SYSTEM_PROMPT = `You are the Anker Charging Offline Planning Assistant, an AI helper for the Anker Charging planning teams. Your role is to help team members with:
 
 1. **CPFR (Collaborative Planning, Forecasting, and Replenishment)** processes for retailers:
    - Walmart, Target (TGT), Best Buy (BBY), Costco, Apple, Staples
@@ -29,7 +29,7 @@ const BASE_SYSTEM_PROMPT = `You are the Anker N.A. Offline Planning Assistant, a
    - Cross-functional documentation
 
 5. **Training Materials**:
-   - Demand Planning Training resources
+   - Offline Planning Training resources
    - Alloy platform guides
    - Forecast evolution documentation
 
@@ -46,7 +46,7 @@ const BASE_SYSTEM_PROMPT = `You are the Anker N.A. Offline Planning Assistant, a
  */
 function buildSystemPrompt(context) {
   if (!context || context.length === 0) {
-    return BASE_SYSTEM_PROMPT + '\n\n**Note:** No internal documents have been loaded yet. Answers are based on general demand planning knowledge.'
+    return BASE_SYSTEM_PROMPT + '\n\n**Note:** No internal documents have been loaded yet. Answers are based on general offline planning knowledge.'
   }
 
   let contextSection = '\n\n---\n\n**RELEVANT INTERNAL DOCUMENTS:**\n\n'

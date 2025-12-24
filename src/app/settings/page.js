@@ -94,7 +94,7 @@ export default function SettingsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `anker-dp-backup-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `anker-na-offline-planning-backup-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -245,7 +245,7 @@ export default function SettingsPage() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
               <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-                Anker N.A. Offline Planning Assistant
+                Anker Charging Offline Planning Assistant
                 <br />
                 Internal Use Only
               </p>

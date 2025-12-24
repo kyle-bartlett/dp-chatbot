@@ -11,7 +11,7 @@ export default function Home() {
     <AuthGuard>
       <div className="h-screen flex flex-col">
         {/* Header */}
-        <header className="bg-white/70 backdrop-blur border-b border-white/60 shadow-sm">
+        <header className="bg-[#151823]/80 backdrop-blur-md border-b border-[#00A0E9]/20 shadow-lg">
           <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <Logo />
 
@@ -19,28 +19,28 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <Link
                 href="/documents"
-                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 rounded-lg transition-all hover:neon-glow-sm"
                 title="Manage Documents"
               >
                 <FileStack className="w-5 h-5" />
               </Link>
               <Link
                 href="/help"
-                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 rounded-lg transition-all hover:neon-glow-sm"
                 title="Help & Guide"
               >
                 <HelpCircle className="w-5 h-5" />
               </Link>
               <Link
                 href="/settings"
-                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-400 hover:text-[#00A0E9] hover:bg-[#00A0E9]/10 rounded-lg transition-all hover:neon-glow-sm"
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
               </Link>
 
               {/* User menu */}
-              <div className="ml-2 pl-3 border-l border-gray-200">
+              <div className="ml-2 pl-3 border-l border-[#00A0E9]/20">
                 <UserMenu />
               </div>
             </div>
@@ -53,9 +53,9 @@ export default function Home() {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white/70 backdrop-blur border-t border-white/60 py-2 px-4">
+        <footer className="bg-[#151823]/80 backdrop-blur-md border-t border-[#00A0E9]/20 py-2 px-4">
           <p className="text-xs text-center text-gray-400">
-            Anker N.A. Offline Planning Assistant | Powered by Claude AI | Internal Use Only
+            Anker Charging Offline Planning Assistant | Powered by Claude AI | Internal Use Only
           </p>
         </footer>
       </div>

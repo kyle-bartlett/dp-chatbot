@@ -15,7 +15,7 @@ export function ThemeProvider({ children }) {
   // Load theme from localStorage on mount
   useEffect(() => {
     setMounted(true)
-    const saved = localStorage.getItem('anker-dp-theme')
+    const saved = localStorage.getItem('anker-na-offline-planning-theme')
     if (saved) {
       setTheme(saved)
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -27,7 +27,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     if (mounted) {
       document.documentElement.classList.toggle('dark', theme === 'dark')
-      localStorage.setItem('anker-dp-theme', theme)
+      localStorage.setItem('anker-na-offline-planning-theme', theme)
     }
   }, [theme, mounted])
 
