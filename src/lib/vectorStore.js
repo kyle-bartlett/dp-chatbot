@@ -143,31 +143,103 @@ export async function addChunks(chunks, embeddings) {
 }
 
 /**
- * Search for similar chunks using cosine similarity via Supabase RPC
+ * Calculate cosine similarity between two vectors
+ */
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0
+
+  let dotProduct = 0
+  let normA = 0
+  let normB = 0
+
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+
+  if (normA === 0 || normB === 0) return 0
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+}
+
+/**
+ * Search for similar chunks using cosine similarity
+ * Uses client-side calculation as fallback when embeddings are stored as JSON strings
  */
 export async function searchSimilar(queryEmbedding, options = {}) {
   const { topK = 5, minScore = 0.7 } = options
 
-  const { data, error } = await supabase.rpc('match_documents', {
+  // First try the RPC function (for when vector column is properly configured)
+  const { data: rpcData, error: rpcError } = await supabase.rpc('match_documents', {
     query_embedding: queryEmbedding,
     match_threshold: minScore,
     match_count: topK
   })
 
-  if (error) {
-    console.error('Error searching similar chunks:', error)
+  if (!rpcError && rpcData && rpcData.length > 0) {
+    // RPC worked, use those results
+    return rpcData.map(match => ({
+      text: match.content,
+      score: match.similarity,
+      documentId: match.document_id,
+      documentTitle: match.metadata?.documentTitle,
+      documentUrl: match.metadata?.documentUrl,
+      metadata: match.metadata
+    }))
+  }
+
+  // Fallback: fetch all chunks and calculate similarity client-side
+  // This is less efficient but works when embeddings are stored as JSON strings
+  console.log('RPC failed or returned empty, using client-side similarity search')
+  if (rpcError) {
+    console.log('RPC error:', rpcError.message)
+  }
+
+  const { data: chunks, error: fetchError } = await supabase
+    .from('document_chunks')
+    .select('id, document_id, content, embedding, metadata')
+
+  if (fetchError || !chunks) {
+    console.error('Error fetching chunks for similarity search:', fetchError)
     return []
   }
 
-  // Map results to expected format
-  return data.map(match => ({
-    text: match.content,
-    score: match.similarity,
-    documentId: match.document_id,
-    documentTitle: match.metadata?.documentTitle,
-    documentUrl: match.metadata?.documentUrl,
-    metadata: match.metadata
-  }))
+  console.log(`Fetched ${chunks.length} chunks for client-side similarity search`)
+
+  // Calculate similarity for each chunk
+  const results = chunks
+    .map(chunk => {
+      // Parse embedding if it's a string (JSON array)
+      let embedding = chunk.embedding
+      if (typeof embedding === 'string') {
+        try {
+          embedding = JSON.parse(embedding)
+        } catch (e) {
+          console.error('Failed to parse embedding for chunk', chunk.id)
+          return null
+        }
+      }
+
+      const score = cosineSimilarity(queryEmbedding, embedding)
+      return {
+        text: chunk.content,
+        score,
+        documentId: chunk.document_id,
+        documentTitle: chunk.metadata?.documentTitle,
+        documentUrl: chunk.metadata?.documentUrl,
+        metadata: chunk.metadata
+      }
+    })
+    .filter(r => r !== null && r.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK)
+
+  console.log(`Found ${results.length} matching chunks with minScore >= ${minScore}`)
+  if (results.length > 0) {
+    console.log(`Top match score: ${results[0].score.toFixed(4)}, title: ${results[0].documentTitle}`)
+  }
+
+  return results
 }
 
 /**
