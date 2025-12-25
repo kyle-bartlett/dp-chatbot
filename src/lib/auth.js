@@ -72,6 +72,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, account }) {
       // Persist the OAuth tokens right after signin
       if (account) {
+        console.log('[AUTH] JWT callback - Initial login, storing tokens')
+        console.log('[AUTH] access_token exists:', !!account.access_token)
+        console.log('[AUTH] refresh_token exists:', !!account.refresh_token)
+        console.log('[AUTH] expires_at:', account.expires_at)
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
         token.expiresAt = account.expires_at
@@ -121,6 +125,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       // Add user info and access token to session
+      console.log('[AUTH] Session callback')
+      console.log('[AUTH] token.accessToken exists:', !!token.accessToken)
+      console.log('[AUTH] token.accessToken length:', token.accessToken?.length || 0)
+      console.log('[AUTH] token.error:', token.error || 'none')
       if (session.user) {
         session.user.id = token.sub
       }

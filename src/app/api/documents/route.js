@@ -34,6 +34,15 @@ export async function POST(request) {
     // Get user session for OAuth token
     const session = await auth()
 
+    // Debug logging to trace OAuth flow
+    console.log('=== Document Upload Debug ===')
+    console.log('Session exists:', !!session)
+    console.log('Session user:', session?.user?.email || 'NO USER')
+    console.log('Session accessToken exists:', !!session?.accessToken)
+    console.log('Session accessToken length:', session?.accessToken?.length || 0)
+    console.log('Session error:', session?.error || 'none')
+    console.log('=============================')
+
     const body = await request.json()
     const { url, title: customTitle, content: manualContent, type: manualType } = body
 
