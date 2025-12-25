@@ -78,17 +78,25 @@ export async function POST(request) {
     // RAG: Retrieve relevant context
     let context = []
     const stats = await getStats()
+    console.log('Chat RAG stats:', stats)
+    console.log('OpenAI key configured:', !!process.env.OPENAI_API_KEY)
 
     if (stats.totalChunks > 0 && process.env.OPENAI_API_KEY) {
       try {
+        console.log('Generating query embedding for:', message.substring(0, 50))
         const queryEmbedding = await generateQueryEmbedding(message)
+        console.log('Query embedding generated, length:', queryEmbedding?.length)
+
         context = await searchSimilar(queryEmbedding, {
           topK: 5,
           minScore: 0.65
         })
+        console.log('RAG search returned', context.length, 'results')
       } catch (ragError) {
         console.error('RAG error (continuing without context):', ragError.message)
       }
+    } else {
+      console.log('Skipping RAG:', stats.totalChunks === 0 ? 'no chunks in database' : 'OpenAI key not configured')
     }
 
     // Build system prompt with context
