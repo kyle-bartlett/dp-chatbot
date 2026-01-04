@@ -1,16 +1,44 @@
-# Anker Charging Knowledge Hub
+# Anker Supply Chain Knowledge Hub
 
-AI-powered chatbot for the Anker Demand Planning team. Built with Next.js and Claude AI with RAG (Retrieval Augmented Generation) for intelligent document search.
+**AI-Powered Cross-Functional Knowledge Assistant** for the entire supply chain organization. Built with Next.js 14, Claude AI, and live Google Workspace integration.
 
-## Features
+## 🎯 Purpose
 
-- **Professional Chat Interface** - Anker branding with lightning bolt + battery logo
-- **Claude AI Backend** - Powered by Claude for intelligent responses
-- **Document RAG System** - Feed your docs, get intelligent answers
-- **Google Sheets/Docs Integration** - Import directly from Google
-- **Manual Content Upload** - Paste from Lark or any source
-- **Semantic Search** - Finds relevant information across all documents
-- **Source Citations** - Know where answers come from
+This isn't just a demand planning chatbot—it's a comprehensive knowledge hub for:
+
+- ✅ **Demand & Supply Planners** - Forecasts, CPFR, week-over-week analysis
+- ✅ **Operations** - Pipeline tracking, inbound ETAs, logistics
+- ✅ **GTM Teams** - Launch tracking, retail coverage, campaigns
+- ✅ **Sales** - Account management, revenue pipelines
+- ✅ **Management** - Summary dashboards, risk reports, KPIs
+
+**All with live Google Sheets/Docs sync and natural language queries.**
+
+## 🚀 Key Features
+
+### 🔄 Live Google Workspace Integration
+- **Native Drive API access** - No more manual uploads
+- **Folder-based sync** - Automatically discover and index files
+- **Background sync** - Hourly/daily updates from shared folders
+- **Team-based organization** - Files tagged by team/project/folder
+
+### 🧠 Hybrid RAG Engine
+- **Structured reasoning** - Query Google Sheets data (forecasts, pipeline, inventory)
+- **Semantic search** - Natural language queries across SOPs, docs, comments
+- **Intelligent routing** - Automatically detects query type and searches accordingly
+- **Context-aware answers** - Results filtered by team and role
+
+### 👥 Multi-Role Support
+- **Role-based context** - Demand planner, supply planner, ops, GTM, sales, management
+- **Team filtering** - See only relevant files and data for your team
+- **Context switching** - Easily switch between team contexts
+- **Personalized responses** - Answers tailored to your role
+
+### 📊 Smart Retrieval
+- **Week-over-week analysis** - Track forecast changes automatically
+- **SKU lookup** - Find any ASIN or product code instantly
+- **Cross-file search** - Answers that span multiple sheets and docs
+- **Source citations** - Always know where information came from
 
 ## Quick Start
 
@@ -21,26 +49,37 @@ cd anker-dp-chatbot
 npm install
 ```
 
-### 2. Configure environment
+### 2. Set up Supabase Database
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Run the database setup script (see `Database Schema` section below)
+3. Enable pgvector extension in Supabase dashboard
+
+### 3. Configure environment
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` with your API keys:
+Edit `.env.local` with your credentials:
 
 ```bash
-# Required for chat
-ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Authentication (Google OAuth for @anker.com domain)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=http://localhost:3000
 
-# Required for document search
-OPENAI_API_KEY=sk-your-key-here
+# Database (Supabase)
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
-# Optional: for Google Sheets/Docs import
-GOOGLE_API_KEY=your-google-api-key
+# AI APIs
+ANTHROPIC_API_KEY=sk-ant-your-key-here  # Required for chat
+OPENAI_API_KEY=sk-your-key-here          # Required for embeddings
 ```
 
-### 3. Run development server
+### 4. Run development server
 
 ```bash
 npm run dev
@@ -48,95 +87,337 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
-## Adding Documents
+## 📂 Setting Up Folder Sync
 
-1. Click the **documents icon** (📄) in the header
-2. Choose **Google URL** or **Paste Content**
-3. Add your SOPs, training docs, CPFR procedures
-4. The chatbot will automatically search them when answering
+### Initial Setup
 
-### Supported Sources
+1. **Sign in** with your @anker.com Google account
+2. **Navigate to Settings** (⚙️ icon)
+3. **Set your role and team context**
+   - Role: Demand Planner, Supply Planner, Operations, GTM, Sales, or Management
+   - Team: Your primary team/department
+4. **Configure folder sync**
+   - Go to "Sync Folders" section
+   - Browse your Google Drive
+   - Select folders to sync (e.g., "Demand Planning Forecasts", "Pipeline Data")
+   - Set sync frequency (hourly, daily, weekly)
+   - Assign team context to each folder
 
-- Google Sheets (with Google API key)
-- Google Docs (with Google API key)
-- Manual paste (Lark, text, any content)
+### How Sync Works
 
-## Project Structure
+1. **Folder Discovery** - System lists all Sheets and Docs in selected folders
+2. **Metadata Tracking** - Files are tracked with modification dates, owners, paths
+3. **Background Sync** - New/updated files are detected automatically
+4. **Content Processing**:
+   - **Sheets** → Structured data + searchable chunks
+   - **Docs** → Semantic embeddings for natural language search
+5. **Team Tagging** - Files are tagged with team context for filtered search
+
+### Supported File Types
+
+- ✅ **Google Sheets** - Forecasts, pipeline, inventory, tracking, CPFR
+- ✅ **Google Docs** - SOPs, training guides, meeting notes, procedures
+- ✅ **Comments** - Planner comments embedded in sheets (future feature)
+
+## 🏗️ Architecture
+
+### Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Frontend** | Next.js 14 (App Router), React 18, Tailwind 4 |
+| **Auth** | NextAuth with Google OAuth (@anker.com domain) |
+| **Database** | Supabase (PostgreSQL + pgvector) |
+| **AI/LLM** | Claude (Anthropic) for chat, OpenAI for embeddings |
+| **APIs** | Google Drive API, Sheets API, Docs API |
+| **Deployment** | Vercel (frontend), Supabase (database) |
+
+### System Components
 
 ```
-anker-dp-chatbot/
+┌─────────────────────────────────────────────────────────┐
+│                      User Interface                      │
+│  (Chat, Settings, Folder Browser, Context Switcher)     │
+└────────────────────┬────────────────────────────────────┘
+                     │
+          ┌──────────┴──────────┐
+          │   Next.js API Routes │
+          └──────────┬───────────┘
+                     │
+      ┌──────────────┼──────────────┐
+      │              │              │
+┌─────▼─────┐  ┌────▼────┐  ┌──────▼──────┐
+│  Hybrid   │  │  Drive  │  │   Context   │
+│ Retrieval │  │  Sync   │  │  Manager    │
+└─────┬─────┘  └────┬────┘  └──────┬──────┘
+      │             │              │
+┌─────┴──────┬──────┴──────┬───────┴──────┐
+│ Structured │   Semantic  │  User Prefs  │
+│   Store    │    Store    │    Store     │
+│ (Sheets)   │   (Docs)    │ (Roles)      │
+└────────────┴─────────────┴──────────────┘
+             Supabase Database
+```
+
+## 📁 Project Structure
+
+```
+dp-chatbot/
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── chat/          # Claude + RAG API
-│   │   │   └── documents/     # Document management API
+│   │   │   ├── auth/          # NextAuth endpoints
+│   │   │   ├── chat/          # Claude + Hybrid RAG
+│   │   │   ├── context/       # User role/team management
+│   │   │   ├── documents/     # Manual document upload
+│   │   │   ├── import/        # Folder import/sync
+│   │   │   ├── sku/           # SKU lookup
+│   │   │   └── sync/          # Background sync engine
 │   │   ├── documents/         # Document management page
-│   │   ├── globals.css
-│   │   ├── layout.js
-│   │   └── page.js            # Main chat page
-│   ├── components/
-│   │   ├── ChatInput.jsx
+│   │   ├── settings/          # User settings & sync config
+│   │   ├── help/              # Help & onboarding
+│   │   └── page.js            # Main chat interface
+│   ├── components/            # UI components
 │   │   ├── ChatWindow.jsx
-│   │   ├── Logo.jsx
+│   │   ├── ChatInput.jsx
 │   │   ├── MessageBubble.jsx
-│   │   └── TypingIndicator.jsx
+│   │   ├── RoleSelector.jsx   # (to be created)
+│   │   └── SyncStatus.jsx     # (to be created)
 │   └── lib/
+│       ├── auth.js            # NextAuth config
 │       ├── chunker.js         # Document chunking
+│       ├── driveSync.js       # ✨ NEW: Drive folder sync
 │       ├── embeddings.js      # OpenAI embeddings
-│       ├── googleApi.js       # Google Sheets/Docs
-│       └── vectorStore.js     # Vector search
-├── data/                      # Document storage (auto-created)
+│       ├── googleApi.js       # Google Sheets/Docs API
+│       ├── hybridRetrieval.js # ✨ NEW: Hybrid search engine
+│       ├── structuredProcessor.js # ✨ NEW: Sheets processor
+│       ├── supabaseClient.js  # Supabase connection
+│       ├── vectorStore.js     # Vector search
+│       └── skuLookup.js       # SKU search
 └── package.json
 ```
 
-## Deployment
+## 📊 Database Setup
+
+### Supabase Configuration
+
+1. **Create a Supabase project** at [supabase.com](https://supabase.com)
+
+2. **Enable pgvector extension:**
+   - Go to Database → Extensions
+   - Search for "vector"
+   - Enable the pgvector extension
+
+3. **Run the schema:**
+   - Go to SQL Editor
+   - Copy contents of `DATABASE_SCHEMA.sql`
+   - Execute the script
+
+4. **Get your credentials:**
+   - Go to Settings → API
+   - Copy the Project URL and anon/public key
+   - Add to `.env.local`
+
+### Google Workspace Setup
+
+1. **Create OAuth credentials:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Create a new OAuth 2.0 Client ID (Web application)
+   
+2. **Enable required APIs:**
+   - Google Drive API
+   - Google Sheets API
+   - Google Docs API
+
+3. **Configure OAuth consent screen:**
+   - User type: Internal (for G Suite) or External
+   - Add authorized domain: `anker.com`
+   - Scopes needed:
+     - `https://www.googleapis.com/auth/drive.readonly`
+     - `https://www.googleapis.com/auth/spreadsheets.readonly`
+     - `https://www.googleapis.com/auth/documents.readonly`
+
+4. **Add redirect URIs:**
+   - Development: `http://localhost:3000/api/auth/callback/google`
+   - Production: `https://your-domain.com/api/auth/callback/google`
+
+---
+
+## 🚀 Deployment
 
 ### Vercel (Recommended)
 
-1. Push to GitHub
-2. Import project in Vercel
-3. Add environment variables:
-   - `ANTHROPIC_API_KEY`
-   - `OPENAI_API_KEY`
-   - `GOOGLE_API_KEY` (optional)
-4. Deploy
+1. **Push to GitHub**
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin your-repo-url
+   git push -u origin main
+   ```
 
-### Environment Variables
+2. **Import to Vercel**
+   - Go to [vercel.com](https://vercel.com)
+   - Import your GitHub repository
+   - Vercel will auto-detect Next.js
+
+3. **Configure environment variables:**
+   
+   In Vercel dashboard → Settings → Environment Variables, add:
+   
+   ```
+   ANTHROPIC_API_KEY
+   OPENAI_API_KEY
+   GOOGLE_CLIENT_ID
+   GOOGLE_CLIENT_SECRET
+   NEXTAUTH_SECRET
+   NEXTAUTH_URL
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_ANON_KEY
+   ```
+
+4. **Deploy**
+   - Vercel will automatically deploy
+   - Updates push automatically on Git commits
+
+### Environment Variables Reference
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Claude API for chat |
-| `OPENAI_API_KEY` | For docs | Embeddings for search |
-| `GOOGLE_API_KEY` | Optional | Google Sheets/Docs access |
+| `ANTHROPIC_API_KEY` | ✅ Yes | Claude API for chat responses |
+| `OPENAI_API_KEY` | ✅ Yes | Embeddings for semantic search |
+| `GOOGLE_CLIENT_ID` | ✅ Yes | OAuth authentication + Drive API |
+| `GOOGLE_CLIENT_SECRET` | ✅ Yes | OAuth authentication |
+| `NEXTAUTH_SECRET` | ✅ Yes | NextAuth session encryption |
+| `NEXTAUTH_URL` | ✅ Yes | Your app URL |
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ Yes | Supabase public API key |
 
-## How It Works
+## 🔧 How It Works
 
-1. **Document Ingestion**: Documents are split into chunks (~1000 chars)
-2. **Embedding**: Each chunk is converted to a vector using OpenAI
-3. **Storage**: Vectors stored in local JSON (upgradeable to Pinecone)
-4. **Query**: User questions are embedded and matched against chunks
-5. **Generation**: Relevant chunks sent to Claude for answer generation
+### The Magic Behind the Scenes
 
-## Roadmap
+1. **🔐 Authentication**
+   - User signs in with @anker.com Google account
+   - OAuth grants access to Drive, Sheets, Docs APIs
+   - Session created with access token
 
+2. **📂 Folder Sync**
+   - User selects Drive folders to monitor
+   - System recursively discovers all Sheets/Docs
+   - Metadata tracked (name, modified date, owner, path)
+   - Background sync detects new/updated files
+
+3. **📊 Dual Processing**
+   - **Sheets** → Parsed into structured database records (SKU, forecast, dates, numbers)
+   - **Docs** → Chunked into ~1000 char segments, embedded with OpenAI
+   - Both indexed for fast retrieval
+
+4. **🔍 Intelligent Search**
+   - Query analyzed for intent (structured vs semantic)
+   - **Structured search** → SQL queries on sheet data
+   - **Semantic search** → Vector similarity on document chunks
+   - Results combined and ranked
+
+5. **🧠 Answer Generation**
+   - Retrieved context formatted for Claude
+   - Role-based prompt engineering
+   - Claude generates human-friendly answer
+   - Sources cited with links
+
+---
+
+## 💰 Cost Estimate
+
+| Service | Usage | Cost | Notes |
+|---------|-------|------|-------|
+| **Claude API** | ~1M tokens/month | ~$3-8 | Chat responses |
+| **OpenAI Embeddings** | ~5M tokens/month | ~$0.10 | Very cheap |
+| **Supabase** | Hobby tier | Free-$25 | Scales with data |
+| **Vercel** | Hobby tier | Free-$20 | Scales with traffic |
+| **Total** | Moderate use | **$3-50/month** | Scales with team size |
+
+> **Note:** Costs scale with usage. Heavy teams may need higher tiers.
+
+---
+
+## 📚 Documentation
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed system architecture
+- **[DATABASE_SCHEMA.sql](./DATABASE_SCHEMA.sql)** - Complete database schema
+- **[USAGE_EXAMPLES.md](./USAGE_EXAMPLES.md)** - Query examples by role
+- **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** - UI/UX guidelines
+
+---
+
+## 🎯 Roadmap
+
+### ✅ Completed (v1.0)
 - [x] Professional chat UI with Anker branding
 - [x] Claude AI integration
-- [x] Document ingestion system
-- [x] RAG with semantic search
-- [x] Document management page
-- [ ] Google OAuth (Anker domain restriction)
-- [ ] SKU lookup functionality
-- [ ] CPFR forecast integration
-- [ ] Lark API integration
+- [x] Google OAuth (@anker.com domain)
+- [x] Supabase database with pgvector
+- [x] Hybrid RAG (structured + semantic)
+- [x] Google Drive folder sync
+- [x] Multi-role support
+- [x] SKU lookup functionality
+- [x] Team context filtering
 
-## API Costs (Estimated)
+### 🚧 In Progress (v1.1)
+- [ ] Background sync scheduler
+- [ ] Real-time sync status dashboard
+- [ ] Enhanced settings UI for folder management
+- [ ] Role selector component in chat
+- [ ] Week-over-week analysis UI
 
-| Service | Cost | Notes |
-|---------|------|-------|
-| Claude API | ~$3/1M tokens | Main chat |
-| OpenAI Embeddings | ~$0.02/1M tokens | Very cheap |
-| **Monthly estimate** | **~$20-50** | For moderate team use |
+### 🔮 Planned (v2.0)
+- [ ] Drive webhooks (real-time file change notifications)
+- [ ] Planner comments extraction from Sheets
+- [ ] Excel file upload support
+- [ ] Advanced analytics dashboard
+- [ ] Slack/Teams integration
+- [ ] Mobile app
 
-## Internal Use Only
+---
 
-This application is for Anker Demand Planning team internal use.
+## 🛟 Support & Troubleshooting
+
+### Common Issues
+
+**Problem:** "Authentication failed"
+- **Solution:** Check Google OAuth credentials, ensure redirect URIs match
+
+**Problem:** "No documents found"
+- **Solution:** Configure folder sync in Settings, wait for processing
+
+**Problem:** "Search returns no results"
+- **Solution:** Check team context filter, verify files are synced
+
+**Problem:** "Slow responses"
+- **Solution:** Check API rate limits, database indexes, Supabase plan
+
+### Getting Help
+
+For internal support:
+- Check [USAGE_EXAMPLES.md](./USAGE_EXAMPLES.md) for query tips
+- Review [ARCHITECTURE.md](./ARCHITECTURE.md) for system details
+- Contact the platform team for technical issues
+
+---
+
+## 🔒 Security & Privacy
+
+- ✅ **Domain-restricted** - Only @anker.com accounts
+- ✅ **OAuth-based** - No password storage
+- ✅ **Encrypted** - All data encrypted at rest (Supabase)
+- ✅ **Private** - Data never leaves your control
+- ✅ **Auditable** - All queries logged
+- ✅ **Compliant** - Follows Google Workspace security policies
+
+---
+
+## 📄 License
+
+**Proprietary** - For internal Anker use only.
+
+This application contains confidential business information and is not for public distribution.
