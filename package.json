@@ -1,7 +1,7 @@
 {
-  "name": "anker-dp-chatbot",
-  "version": "1.0.0",
-  "description": "Anker Demand Planning Team Chatbot - AI-powered knowledge assistant",
+  "name": "anker-supply-chain-knowledge-hub",
+  "version": "2.0.0",
+  "description": "Anker Supply Chain Knowledge Hub - AI-powered cross-functional assistant with live Google Workspace sync, hybrid RAG, and multi-role support",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,11 +10,16 @@
   },
   "keywords": [
     "anker",
+    "supply-chain",
     "demand-planning",
     "chatbot",
-    "ai"
+    "ai",
+    "rag",
+    "google-workspace",
+    "claude",
+    "knowledge-management"
   ],
-  "author": "Anker DP Team",
+  "author": "Anker Supply Chain Team",
   "license": "PROPRIETARY",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

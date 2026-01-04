@@ -1,72 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { generateQueryEmbedding } from '@/lib/embeddings'
-import { searchSimilar, getStats } from '@/lib/vectorStore'
+import { auth } from '@/lib/auth'
+import { hybridRetrieval, buildContextualPrompt } from '@/lib/hybridRetrieval'
+import { getStats } from '@/lib/vectorStore'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const BASE_SYSTEM_PROMPT = `You are the Anker Charging Offline Planning Assistant, an AI helper for the Anker Charging planning teams. Your role is to help team members with:
-
-1. **CPFR (Collaborative Planning, Forecasting, and Replenishment)** processes for retailers:
-   - Walmart, Target (TGT), Best Buy (BBY), Costco, Apple, Staples
-   - Forecast logic, ladder refresh processes, and update procedures
-
-2. **KPIs and Dashboards**:
-   - US Anker KPI Dashboard
-   - DP OKR Tracker
-   - Sellin FC accuracy tracking
-
-3. **Reports and Documents**:
-   - Aggregators (Sellin FC, Sellout, History)
-   - IOQ FCST Files
-   - NPI/EOL Management
-   - Weekly Sales Reports
-
-4. **Supply Chain**:
-   - Pipeline inventory
-   - PSI Ladders
-   - Cross-functional documentation
-
-5. **Training Materials**:
-   - Offline Planning Training resources
-   - Alloy platform guides
-   - Forecast evolution documentation
-
-**Guidelines:**
-- Be helpful, professional, and concise
-- When answering questions, cite the source documents when available
-- Use markdown formatting for clarity (bullet points, bold, etc.)
-- For complex topics, break down explanations into digestible parts
-- Always maintain confidentiality - this is internal information
-- If you find relevant information in the provided context, use it. If not, answer based on your general knowledge and note that specific Anker documentation may not be available yet.`
-
-/**
- * Build system prompt with retrieved context
- */
-function buildSystemPrompt(context) {
-  if (!context || context.length === 0) {
-    return BASE_SYSTEM_PROMPT + '\n\n**Note:** No internal documents have been loaded yet. Answers are based on general offline planning knowledge.'
-  }
-
-  let contextSection = '\n\n---\n\n**RELEVANT INTERNAL DOCUMENTS:**\n\n'
-
-  context.forEach((chunk, idx) => {
-    contextSection += `**[${idx + 1}] ${chunk.documentTitle}**\n`
-    if (chunk.documentUrl) {
-      contextSection += `Source: ${chunk.documentUrl}\n`
-    }
-    contextSection += `\n${chunk.text}\n\n---\n\n`
-  })
-
-  contextSection += 'Use the above internal documents to answer questions when relevant. Cite sources by document name.'
-
-  return BASE_SYSTEM_PROMPT + contextSection
-}
-
 export async function POST(request) {
   try {
-    const { message, history } = await request.json()
+    const { message, history, userContext } = await request.json()
 
     if (!process.env.ANTHROPIC_API_KEY) {
       return Response.json(
@@ -75,32 +18,40 @@ export async function POST(request) {
       )
     }
 
-    // RAG: Retrieve relevant context
-    let context = []
+    // Get session for user context
+    const session = await auth()
+    const user = session?.user || {}
+
+    // Build user context
+    const context = {
+      role: userContext?.role || 'general',
+      team: userContext?.team || 'general',
+      name: user.name || 'User',
+      email: user.email
+    }
+
+    console.log('Chat request from:', user.email, 'Role:', context.role, 'Team:', context.team)
+    console.log('Query:', message.substring(0, 100))
+
+    // Hybrid RAG: Retrieve relevant context using both structured and semantic search
+    let retrievalResults = { results: [], structured: [], semantic: [], queryType: 'hybrid', totalResults: 0 }
+    
     const stats = await getStats()
-    console.log('Chat RAG stats:', stats)
-    console.log('OpenAI key configured:', !!process.env.OPENAI_API_KEY)
+    console.log('Knowledge base stats:', stats)
 
-    if (stats.totalChunks > 0 && process.env.OPENAI_API_KEY) {
+    if (process.env.OPENAI_API_KEY) {
       try {
-        console.log('Generating query embedding for:', message.substring(0, 50))
-        const queryEmbedding = await generateQueryEmbedding(message)
-        console.log('Query embedding generated, length:', queryEmbedding?.length)
-
-        context = await searchSimilar(queryEmbedding, {
-          topK: 5,
-          minScore: 0.65
-        })
-        console.log('RAG search returned', context.length, 'results')
+        retrievalResults = await hybridRetrieval(message, context)
+        console.log(`Hybrid retrieval: ${retrievalResults.structured.length} structured, ${retrievalResults.semantic.length} semantic results`)
       } catch (ragError) {
         console.error('RAG error (continuing without context):', ragError.message)
       }
     } else {
-      console.log('Skipping RAG:', stats.totalChunks === 0 ? 'no chunks in database' : 'OpenAI key not configured')
+      console.log('OpenAI key not configured, skipping RAG')
     }
 
-    // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(context)
+    // Build context-aware system prompt
+    const systemPrompt = buildContextualPrompt(message, retrievalResults, context)
 
     // Build messages array from history
     const messages = []
@@ -132,11 +83,15 @@ export async function POST(request) {
 
     return Response.json({
       response: assistantMessage,
-      sourcesUsed: context.length,
-      sources: context.map(c => ({
-        title: c.documentTitle,
-        url: c.documentUrl,
-        score: c.score
+      queryType: retrievalResults.queryType,
+      sourcesUsed: retrievalResults.totalResults,
+      structuredResults: retrievalResults.structured.length,
+      semanticResults: retrievalResults.semantic.length,
+      sources: retrievalResults.results.slice(0, 10).map(r => ({
+        title: r.source,
+        url: r.sourceUrl,
+        type: r.type,
+        score: r.score
       }))
     })
   } catch (error) {
