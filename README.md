@@ -71,12 +71,12 @@ NEXTAUTH_SECRET=your-nextauth-secret
 NEXTAUTH_URL=http://localhost:3000
 
 # Database (Supabase)
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_SUPABASE_URL=https://pazimclstnnenmydyuwj.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhemltY2xzdG5uZW5teWR5dXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNDU4MDAsImV4cCI6MjA4MTcyMTgwMH0.OYbZ0HFv-SEnkPubNNbN5lVmR3qYqFm6jRo5bTpnjew
 
 # AI APIs
-ANTHROPIC_API_KEY=sk-ant-your-key-here  # Required for chat
-OPENAI_API_KEY=sk-your-key-here          # Required for embeddings
+ANTHROPIC_API_KEY=sk-kXOuyAyZWcuWBmURrKMNkQ  # Required for chat
+OPENAI_API_KEY=sk-your-key-here              # Required for embeddings
 ```
 
 ### 4. Run development server
