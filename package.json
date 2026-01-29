@@ -1,0 +1,44 @@
+{
+  "name": "anker-supply-chain-knowledge-hub",
+  "version": "2.0.0",
+  "description": "Anker Supply Chain Knowledge Hub - AI-powered cross-functional assistant with live Google Workspace sync, hybrid RAG, and multi-role support",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": [
+    "anker",
+    "supply-chain",
+    "demand-planning",
+    "chatbot",
+    "ai",
+    "rag",
+    "google-workspace",
+    "claude",
+    "knowledge-management"
+  ],
+  "author": "Anker Supply Chain Team",
+  "license": "PROPRIETARY",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@supabase/supabase-js": "^2.89.0",
+    "@swc/helpers": "^0.5.17",
+    "@tailwindcss/postcss": "^4.1.17",
+    "autoprefixer": "^10.4.22",
+    "caniuse-lite": "^1.0.30001761",
+    "client-only": "^0.0.1",
+    "googleapis": "^168.0.0",
+    "lucide-react": "^0.559.0",
+    "next": "^14.2.33",
+    "next-auth": "^5.0.0-beta.30",
+    "openai": "^6.10.0",
+    "postcss": "^8.5.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "styled-jsx": "^5.1.7",
+    "tailwindcss": "^4.1.17",
+    "uuid": "^13.0.0"
+  }
+}
