@@ -4,6 +4,9 @@
  */
 
 import OpenAI from 'openai'
+import { withTimeout, withRetry } from './apiUtils'
+
+const OPENAI_TIMEOUT_MS = 60_000 // 60 seconds for embedding generation
 
 let openaiClient = null
 
@@ -152,12 +155,19 @@ export async function generateEmbeddings(texts) {
     try {
       // Create a clean copy to ensure no hidden properties
       const cleanInput = JSON.parse(JSON.stringify(inputToSend))
-      
-      const response = await client.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: cleanInput,
-        encoding_format: 'float'
-      })
+
+      const response = await withRetry(
+        () => withTimeout(
+          client.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: cleanInput,
+            encoding_format: 'float'
+          }),
+          OPENAI_TIMEOUT_MS,
+          'OpenAI embedding generation'
+        ),
+        { maxRetries: 3, baseDelayMs: 1000 }
+      )
 
       const embeddings = response.data.map(item => item.embedding)
       allEmbeddings.push(...embeddings)
@@ -212,3 +222,11 @@ export function cosineSimilarity(a, b) {
 
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
 }
+
+/**
+ * Export aliases for backward compatibility.
+ * - getEmbeddings: used by src/app/api/sync/route.js
+ * - getEmbedding: used by src/lib/hybridRetrieval.js
+ */
+export const getEmbeddings = generateEmbeddings
+export const getEmbedding = generateQueryEmbedding

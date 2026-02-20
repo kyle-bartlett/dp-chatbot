@@ -3,19 +3,51 @@
  * Manages user context, role, and team settings
  */
 
-import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { z } from 'zod'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  ErrorCode,
+  apiError,
+  apiSuccess,
+  requireAuth,
+  validateBody,
+  generateRequestId,
+  sanitizeError
+} from '@/lib/apiUtils'
+
+const VALID_ROLES = [
+  'general',
+  'demand_planner',
+  'supply_planner',
+  'operations',
+  'gtm',
+  'sales',
+  'management'
+]
+
+const VALID_TEAMS = [
+  'general',
+  'demand',
+  'supply',
+  'ops',
+  'gtm',
+  'sales',
+  'all'
+]
+
+const contextPostSchema = z.object({
+  role: z.enum(VALID_ROLES).optional().default('general'),
+  team: z.enum(VALID_TEAMS).optional().default('general'),
+  preferences: z.record(z.unknown()).optional().default({})
+})
 
 export async function GET(request) {
-  try {
-    const session = await auth()
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const requestId = generateRequestId()
 
-    // Get user's saved context/preferences
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  try {
     const { data, error } = await supabase
       .from('user_preferences')
       .select('*')
@@ -24,10 +56,14 @@ export async function GET(request) {
 
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
       console.error('Error fetching user context:', error)
-      return NextResponse.json({ error: 'Failed to fetch context' }, { status: 500 })
+      return apiError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to fetch context',
+        500,
+        requestId
+      )
     }
 
-    // Return default context if none saved
     const context = data || {
       user_id: session.user.email,
       role: 'general',
@@ -36,64 +72,39 @@ export async function GET(request) {
       preferences: {}
     }
 
-    return NextResponse.json({ context })
+    return apiSuccess({ context }, requestId)
   } catch (error) {
     console.error('Error in context GET:', error)
-    return NextResponse.json({ 
-      error: error.message || 'Failed to process request' 
-    }, { status: 500 })
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to fetch context'),
+      500,
+      requestId
+    )
   }
 }
 
 export async function POST(request) {
-  try {
-    const session = await auth()
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const requestId = generateRequestId()
 
-    const body = await request.json()
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  // Validate request body
+  const { data: body, errorResponse: validationError } = await validateBody(request, contextPostSchema)
+  if (validationError) return validationError
+
+  try {
     const { role, team, preferences } = body
 
-    // Validate role
-    const validRoles = [
-      'general',
-      'demand_planner',
-      'supply_planner',
-      'operations',
-      'gtm',
-      'sales',
-      'management'
-    ]
-
-    const validTeams = [
-      'general',
-      'demand',
-      'supply',
-      'ops',
-      'gtm',
-      'sales',
-      'all'
-    ]
-
-    if (role && !validRoles.includes(role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
-    }
-
-    if (team && !validTeams.includes(team)) {
-      return NextResponse.json({ error: 'Invalid team' }, { status: 400 })
-    }
-
-    // Update user preferences
     const { data, error } = await supabase
       .from('user_preferences')
       .upsert({
         user_id: session.user.email,
-        role: role || 'general',
-        team: team || 'general',
-        default_team_context: team || 'general',
-        preferences: preferences || {},
+        role,
+        team,
+        default_team_context: team,
+        preferences,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' })
       .select()
@@ -101,19 +112,27 @@ export async function POST(request) {
 
     if (error) {
       console.error('Error saving user context:', error)
-      return NextResponse.json({ error: 'Failed to save context' }, { status: 500 })
+      return apiError(
+        ErrorCode.INTERNAL_ERROR,
+        'Failed to save context',
+        500,
+        requestId
+      )
     }
 
-    return NextResponse.json({ 
+    return apiSuccess({
       success: true,
       context: data,
-      message: 'Context updated successfully' 
-    })
+      message: 'Context updated successfully'
+    }, requestId)
   } catch (error) {
     console.error('Error in context POST:', error)
-    return NextResponse.json({ 
-      error: error.message || 'Failed to process request' 
-    }, { status: 500 })
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to save context'),
+      500,
+      requestId
+    )
   }
 }
 

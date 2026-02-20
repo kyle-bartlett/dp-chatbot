@@ -3,8 +3,7 @@
  * Handles Google Drive folder synchronization
  */
 
-import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { z } from 'zod'
 import {
   listDriveFiles,
   getFolderMetadata,
@@ -14,90 +13,129 @@ import {
   syncFolder,
   getSyncStats,
   getFilesNeedingProcessing,
-  markFileAsProcessed
+  claimFilesForProcessing,
+  releaseClaimedFile,
+  markFileAsProcessed,
+  acquireSyncLock,
+  releaseSyncLock
 } from '@/lib/driveSync'
 import { fetchSpreadsheet, fetchDocument } from '@/lib/googleApi'
-import { addDocument, addChunks } from '@/lib/vectorStore'
+import { addDocument, addChunks, removeDocument } from '@/lib/vectorStore'
 import { chunkDocument } from '@/lib/chunker'
 import { getEmbeddings } from '@/lib/embeddings'
 import { processAndStoreSpreadsheet } from '@/lib/structuredProcessor'
-import { v4 as uuidv4 } from 'uuid'
+import { randomUUID } from 'crypto'
+import {
+  ErrorCode,
+  apiError,
+  apiSuccess,
+  requireAuth,
+  validateBody,
+  validateParams,
+  generateRequestId,
+  sanitizeError
+} from '@/lib/apiUtils'
+
+// Google Drive folder IDs: alphanumeric, hyphens, underscores only
+const FOLDER_ID_REGEX = /^[a-zA-Z0-9_-]+$/
+
+const syncGetSchema = z.object({
+  action: z.enum(['configs', 'stats', 'list', 'metadata', 'pending']),
+  folderId: z.string().regex(FOLDER_ID_REGEX, 'Invalid folder ID format').optional()
+}).refine(data => {
+  if (['list', 'metadata'].includes(data.action) && !data.folderId) {
+    return false
+  }
+  return true
+}, { message: 'folderId is required for this action' })
+
+const syncPostSchema = z.object({
+  action: z.enum(['configure', 'sync', 'process']),
+  folderId: z.string().regex(FOLDER_ID_REGEX, 'Invalid folder ID format').optional(),
+  folderName: z.string().max(500).optional(),
+  teamContext: z.string().max(100).optional(),
+  syncFrequency: z.enum(['hourly', 'daily', 'weekly']).optional(),
+  limit: z.number().int().min(1).max(50).optional()
+}).refine(data => {
+  if (['configure', 'sync'].includes(data.action) && !data.folderId) {
+    return false
+  }
+  return true
+}, { message: 'folderId is required for this action' })
 
 export async function GET(request) {
+  const requestId = generateRequestId()
+
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  // Validate query params
+  const { searchParams } = new URL(request.url)
+  const { data: params, errorResponse: validationError } = validateParams(searchParams, syncGetSchema)
+  if (validationError) return validationError
+
+  const { action, folderId } = params
+
   try {
-    const session = await auth()
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const action = searchParams.get('action')
-    const folderId = searchParams.get('folderId')
-
-    // Get sync configs
     if (action === 'configs') {
       const configs = await getSyncConfigs(session.user.email)
-      return NextResponse.json({ configs })
+      return apiSuccess({ configs }, requestId)
     }
 
-    // Get sync stats
     if (action === 'stats') {
       const stats = await getSyncStats(session.user.email)
-      return NextResponse.json({ stats })
+      return apiSuccess({ stats }, requestId)
     }
 
-    // List files in a folder
-    if (action === 'list' && folderId) {
+    if (action === 'list') {
       const files = await listDriveFiles(
         folderId,
         session.accessToken,
         { recursive: false }
       )
-      return NextResponse.json({ files })
+      return apiSuccess({ files }, requestId)
     }
 
-    // Get folder metadata
-    if (action === 'metadata' && folderId) {
+    if (action === 'metadata') {
       const metadata = await getFolderMetadata(folderId, session.accessToken)
       const path = await getFolderPath(folderId, session.accessToken)
-      return NextResponse.json({ metadata, path })
+      return apiSuccess({ metadata, path }, requestId)
     }
 
-    // Get files needing processing
     if (action === 'pending') {
       const files = await getFilesNeedingProcessing(20)
-      return NextResponse.json({ files })
+      return apiSuccess({ files }, requestId)
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    return apiError(ErrorCode.VALIDATION_ERROR, 'Invalid action', 400, requestId)
   } catch (error) {
     console.error('Error in sync GET:', error)
-    return NextResponse.json({ 
-      error: error.message || 'Failed to process request' 
-    }, { status: 500 })
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to process sync request'),
+      500,
+      requestId
+    )
   }
 }
 
 export async function POST(request) {
+  const requestId = generateRequestId()
+
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  // Validate request body
+  const { data: body, errorResponse: validationError } = await validateBody(request, syncPostSchema)
+  if (validationError) return validationError
+
+  const { action, folderId, folderName, teamContext, syncFrequency } = body
+
   try {
-    const session = await auth()
-    
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { action, folderId, folderName, teamContext, syncFrequency } = body
-
     // Save sync configuration
     if (action === 'configure') {
-      if (!folderId) {
-        return NextResponse.json({ error: 'Folder ID required' }, { status: 400 })
-      }
-
       const path = await getFolderPath(folderId, session.accessToken)
-      
+
       const config = await saveSyncConfig({
         user_id: session.user.email,
         folder_id: folderId,
@@ -108,54 +146,81 @@ export async function POST(request) {
         sync_frequency: syncFrequency || 'daily'
       })
 
-      return NextResponse.json({ 
+      return apiSuccess({
         success: true,
         config,
-        message: 'Sync configuration saved' 
-      })
+        message: 'Sync configuration saved'
+      }, requestId)
     }
 
-    // Sync a folder
+    // Sync a folder (with concurrency lock)
     if (action === 'sync') {
-      if (!folderId) {
-        return NextResponse.json({ error: 'Folder ID required' }, { status: 400 })
+      const lockAcquired = await acquireSyncLock(folderId)
+      if (!lockAcquired) {
+        return apiError(
+          ErrorCode.CONFLICT,
+          'This folder is already being synced. Please wait and try again.',
+          409,
+          requestId
+        )
       }
 
-      console.log(`Starting sync for folder ${folderId}`)
+      try {
+        console.log(`Starting sync for folder ${folderId}`)
 
-      const syncResult = await syncFolder(
-        folderId,
-        session.accessToken,
-        session.user.email,
-        teamContext || 'general'
-      )
+        const syncResult = await syncFolder(
+          folderId,
+          session.accessToken,
+          session.user.email,
+          teamContext || 'general'
+        )
 
-      return NextResponse.json({ 
-        success: true,
-        result: syncResult,
-        message: `Synced ${syncResult.new} new files, ${syncResult.updated} updated` 
-      })
+        return apiSuccess({
+          success: true,
+          result: syncResult,
+          message: `Synced ${syncResult.new} new files, ${syncResult.updated} updated`
+        }, requestId)
+      } finally {
+        await releaseSyncLock(folderId)
+      }
     }
 
     // Process pending files (fetch content and embed)
+    //
+    // CONCURRENCY FIX: Uses claimFilesForProcessing() which atomically
+    // transitions files from 'pending' to 'processing' using
+    // SELECT FOR UPDATE SKIP LOCKED.
     if (action === 'process') {
       const limit = body.limit || 5
-      const pendingFiles = await getFilesNeedingProcessing(limit)
 
+      // ATOMIC CLAIM: prevents two workers from processing the same files
+      const claimedFiles = await claimFilesForProcessing(limit)
+
+      if (claimedFiles.length === 0) {
+        return apiSuccess({
+          success: true,
+          processed: 0,
+          failed: 0,
+          results: [],
+          message: 'No files available for processing'
+        }, requestId)
+      }
+
+      console.log(`Claimed ${claimedFiles.length} files for processing`)
       const results = []
 
-      for (const file of pendingFiles) {
-        try {
-          console.log(`Processing file: ${file.name} (${file.type})`)
+      for (const file of claimedFiles) {
+        let documentId = null
 
-          let documentId = uuidv4()
+        try {
+          console.log(`Processing claimed file: ${file.name} (${file.type})`)
+
+          documentId = randomUUID()
           let content
 
-          // Fetch content from Google
           if (file.type === 'spreadsheet') {
             content = await fetchSpreadsheet(file.drive_file_id, session.accessToken)
-            
-            // Add to documents table
+
             await addDocument({
               id: documentId,
               title: file.name,
@@ -169,7 +234,6 @@ export async function POST(request) {
               }
             })
 
-            // Process structured data
             const structuredResult = await processAndStoreSpreadsheet(content, {
               documentId,
               documentTitle: file.name,
@@ -177,7 +241,6 @@ export async function POST(request) {
               teamContext: file.team_context
             })
 
-            // Also create text chunks for semantic search
             const textContent = formatSpreadsheetAsText(content)
             const chunks = chunkDocument(textContent, {
               documentId,
@@ -203,8 +266,7 @@ export async function POST(request) {
 
           } else if (file.type === 'document') {
             content = await fetchDocument(file.drive_file_id, session.accessToken)
-            
-            // Add to documents table
+
             await addDocument({
               id: documentId,
               title: file.name,
@@ -218,7 +280,6 @@ export async function POST(request) {
               }
             })
 
-            // Create chunks and embeddings
             const chunks = chunkDocument(content.content, {
               documentId,
               documentTitle: file.name,
@@ -241,33 +302,48 @@ export async function POST(request) {
             })
           }
 
-          // Mark as processed
           await markFileAsProcessed(file.drive_file_id, documentId)
 
         } catch (error) {
           console.error(`Error processing file ${file.name}:`, error)
+
+          if (documentId) {
+            try {
+              await removeDocument(documentId)
+              console.log(`Rolled back orphaned document ${documentId} for file ${file.name}`)
+            } catch (rollbackErr) {
+              console.error(`Failed to rollback document for ${file.name}:`, rollbackErr.message)
+            }
+          }
+
+          // Release the claimed file back with sanitized error message
+          await releaseClaimedFile(file.drive_file_id, sanitizeError(error, 'Processing failed'))
+
           results.push({
             file: file.name,
             success: false,
-            error: error.message
+            error: sanitizeError(error, 'Processing failed')
           })
         }
       }
 
-      return NextResponse.json({ 
+      return apiSuccess({
         success: true,
         processed: results.filter(r => r.success).length,
         failed: results.filter(r => !r.success).length,
         results
-      })
+      }, requestId)
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    return apiError(ErrorCode.VALIDATION_ERROR, 'Invalid action', 400, requestId)
   } catch (error) {
     console.error('Error in sync POST:', error)
-    return NextResponse.json({ 
-      error: error.message || 'Failed to process request' 
-    }, { status: 500 })
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to process sync request'),
+      500,
+      requestId
+    )
   }
 }
 
@@ -284,12 +360,10 @@ function formatSpreadsheetAsText(spreadsheetContent) {
 
     text += `\n## Sheet: ${sheetName}\n\n`
 
-    // Headers
     const headers = rows[0]
     text += headers.join(' | ') + '\n'
     text += '-'.repeat(80) + '\n'
 
-    // Data rows (limit to first 100 to avoid huge chunks)
     for (let i = 1; i < Math.min(rows.length, 100); i++) {
       text += rows[i].join(' | ') + '\n'
     }

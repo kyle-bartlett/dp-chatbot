@@ -6,6 +6,10 @@
 
 import { google } from 'googleapis'
 import { supabase } from './supabaseClient'
+import { withTimeout, withRetry } from './apiUtils'
+
+const DRIVE_API_TIMEOUT_MS = 30_000 // 30 seconds per Drive API call
+const MAX_FOLDER_PATH_DEPTH = 20    // Max parent traversal depth
 
 /**
  * Create OAuth2 client with user's access token
@@ -44,11 +48,15 @@ export async function listDriveFiles(folderId = 'root', accessToken, options = {
       // Query for files in current folder
       const query = [`'${currentFolderId}' in parents`, 'trashed = false']
       
-      const response = await drive.files.list({
-        q: query.join(' and '),
-        fields: 'files(id, name, mimeType, modifiedTime, createdTime, owners, webViewLink, parents)',
-        pageSize: 1000
-      })
+      const response = await withTimeout(
+        drive.files.list({
+          q: query.join(' and '),
+          fields: 'files(id, name, mimeType, modifiedTime, createdTime, owners, webViewLink, parents)',
+          pageSize: 1000
+        }),
+        DRIVE_API_TIMEOUT_MS,
+        'Drive files list'
+      )
 
       const items = response.data.files || []
 
@@ -92,10 +100,14 @@ export async function getFolderMetadata(folderId, accessToken) {
   const drive = google.drive({ version: 'v3', auth })
 
   try {
-    const response = await drive.files.get({
-      fileId: folderId,
-      fields: 'id, name, parents, owners, createdTime, modifiedTime'
-    })
+    const response = await withTimeout(
+      drive.files.get({
+        fileId: folderId,
+        fields: 'id, name, parents, owners, createdTime, modifiedTime'
+      }),
+      DRIVE_API_TIMEOUT_MS,
+      'Drive folder metadata'
+    )
 
     return response.data
   } catch (error) {
@@ -117,18 +129,24 @@ export async function getFolderPath(folderId, accessToken) {
   const path = []
 
   let currentId = folderId
+  let depth = 0
 
-  while (currentId && currentId !== 'root') {
+  while (currentId && currentId !== 'root' && depth < MAX_FOLDER_PATH_DEPTH) {
     try {
-      const response = await drive.files.get({
-        fileId: currentId,
-        fields: 'id, name, parents'
-      })
+      const response = await withTimeout(
+        drive.files.get({
+          fileId: currentId,
+          fields: 'id, name, parents'
+        }),
+        DRIVE_API_TIMEOUT_MS,
+        'Drive folder path lookup'
+      )
 
       const folder = response.data
       path.unshift({ id: folder.id, name: folder.name })
 
       currentId = folder.parents?.[0]
+      depth++
     } catch (error) {
       console.error('Error building folder path:', error.message)
       break
@@ -181,75 +199,78 @@ export async function getSyncConfigs(userId) {
 
   if (error) {
     console.error('Error fetching sync configs:', error)
-    return []
+    throw new Error('Failed to fetch sync configurations')
   }
 
-  return data
+  return data || []
 }
 
 /**
- * Sync a single folder (fetch all files and update database)
+ * Sync a single folder (fetch all files and update database).
+ *
+ * Uses a single atomic upsert per file (ON CONFLICT drive_file_id) rather
+ * than a read-then-write pattern. This eliminates the TOCTOU race where
+ * two concurrent syncs could both see a file as "new" and double-count it.
+ *
+ * New vs updated classification is derived from the upserted row's timestamps:
+ * if created_at and updated_at are within 2 seconds of each other, the row
+ * was just created (new). Otherwise it was an update.
  */
 export async function syncFolder(folderId, accessToken, userId, teamContext = 'general') {
   console.log(`Starting sync for folder ${folderId}`)
 
   // List all files in the folder
   const files = await listDriveFiles(folderId, accessToken, { recursive: true })
-  
+
   console.log(`Found ${files.length} files to sync`)
 
   const syncResults = {
     total: files.length,
     updated: 0,
     new: 0,
+    skipped: 0,
     errors: 0,
     files: []
   }
 
-  // Track sync metadata
   for (const file of files) {
     try {
-      // Check if file already exists in our database
-      const { data: existing } = await supabase
+      // Single atomic upsert — the database handles deduplication via the
+      // UNIQUE constraint on drive_file_id. No separate read needed.
+      const { data: upsertedRow, error: upsertError } = await supabase
         .from('synced_files')
-        .select('id, modified_time')
-        .eq('drive_file_id', file.id)
+        .upsert({
+          drive_file_id: file.id,
+          user_id: userId,
+          folder_id: folderId,
+          name: file.name,
+          type: file.type,
+          url: file.url,
+          team_context: teamContext,
+          modified_time: file.modifiedTime,
+          created_time: file.createdTime,
+          owners: file.owners,
+          sync_status: 'pending',
+          needs_processing: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'drive_file_id' })
+        .select('id, created_at, updated_at')
         .single()
 
-      const needsUpdate = !existing || 
-        new Date(file.modifiedTime) > new Date(existing.modified_time)
-
-      if (needsUpdate) {
-        // Upsert file metadata
-        const { error: upsertError } = await supabase
-          .from('synced_files')
-          .upsert({
-            drive_file_id: file.id,
-            user_id: userId,
-            folder_id: folderId,
-            name: file.name,
-            type: file.type,
-            url: file.url,
-            team_context: teamContext,
-            modified_time: file.modifiedTime,
-            created_time: file.createdTime,
-            owners: file.owners,
-            sync_status: 'pending',
-            needs_processing: true,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'drive_file_id' })
-
-        if (upsertError) {
-          console.error(`Error upserting file ${file.name}:`, upsertError)
-          syncResults.errors++
+      if (upsertError) {
+        console.error(`Error upserting file ${file.name}:`, upsertError)
+        syncResults.errors++
+      } else if (upsertedRow) {
+        // Determine new vs update by comparing created_at and updated_at.
+        // If they're within 2 seconds of each other, this was a fresh insert.
+        const created = new Date(upsertedRow.created_at).getTime()
+        const updated = new Date(upsertedRow.updated_at).getTime()
+        if (Math.abs(updated - created) < 2000) {
+          syncResults.new++
         } else {
-          if (existing) {
-            syncResults.updated++
-          } else {
-            syncResults.new++
-          }
-          syncResults.files.push(file)
+          syncResults.updated++
         }
+        syncResults.files.push(file)
       }
     } catch (error) {
       console.error(`Error processing file ${file.name}:`, error)
@@ -264,7 +285,7 @@ export async function syncFolder(folderId, accessToken, userId, teamContext = 'g
     .eq('folder_id', folderId)
 
   console.log(`Sync complete: ${syncResults.new} new, ${syncResults.updated} updated, ${syncResults.errors} errors`)
-  
+
   return syncResults
 }
 
@@ -281,10 +302,10 @@ export async function getFilesNeedingProcessing(limit = 10) {
 
   if (error) {
     console.error('Error fetching files needing processing:', error)
-    return []
+    throw new Error('Failed to fetch files needing processing')
   }
 
-  return data
+  return data || []
 }
 
 /**
@@ -335,5 +356,123 @@ export async function getSyncStats(userId) {
     totalFiles: totalFiles || 0,
     pendingFiles: pendingFiles || 0,
     syncedFolders: syncedFolders || 0
+  }
+}
+
+/**
+ * Atomically claim files for processing.
+ *
+ * Uses the claim_files_for_processing Postgres function which performs
+ * UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED). This ensures
+ * that two concurrent workers never claim the same file — if another
+ * transaction already holds a lock on a row, it is skipped.
+ *
+ * Claimed files have their sync_status set to 'processing' and
+ * needs_processing set to false, so they won't appear in subsequent claims.
+ *
+ * @param {number} limit - Maximum number of files to claim (default 5)
+ * @returns {Array} The files that were successfully claimed
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
+ */
+export async function claimFilesForProcessing(limit = 5) {
+  const { data, error } = await supabase.rpc('claim_files_for_processing', {
+    p_limit: limit
+  })
+
+  if (error) {
+    console.error('Error claiming files for processing:', error)
+    return []
+  }
+
+  if (data && data.length > 0) {
+    console.log(`Claimed ${data.length} files for processing`)
+  } else {
+    console.log('No files available for processing')
+  }
+
+  return data || []
+}
+
+/**
+ * Release a previously claimed file back to pending or error state.
+ *
+ * Called when processing fails for a specific file. Without this, a file
+ * stuck in 'processing' status would never be picked up again by any worker.
+ *
+ * @param {string} driveFileId - The Google Drive file ID to release
+ * @param {string|null} errorMessage - If provided, marks the file as 'error'
+ *                                     with this message. If null, returns the
+ *                                     file to 'pending' state for retry.
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
+ */
+export async function releaseClaimedFile(driveFileId, errorMessage = null) {
+  const { error } = await supabase.rpc('release_claimed_file', {
+    p_drive_file_id: driveFileId,
+    p_error_message: errorMessage
+  })
+
+  if (error) {
+    console.error('Error releasing claimed file:', error)
+  } else {
+    const action = errorMessage ? `marked as error: ${errorMessage}` : 'returned to pending'
+    console.log(`Released file ${driveFileId}: ${action}`)
+  }
+}
+
+/**
+ * Acquire a time-limited sync lock on a folder.
+ *
+ * Used to prevent concurrent or double-fired scheduled syncs from
+ * processing the same folder simultaneously. The lock expires after
+ * the specified duration, providing automatic recovery if a sync
+ * process crashes without releasing the lock.
+ *
+ * @param {string} folderId - The folder ID to lock
+ * @param {number} lockDurationMinutes - How long to hold the lock (default 30)
+ * @returns {boolean} True if the lock was acquired, false if already held
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
+ */
+export async function acquireSyncLock(folderId, lockDurationMinutes = 30) {
+  const { data: acquired, error } = await supabase.rpc('acquire_sync_lock', {
+    p_folder_id: folderId,
+    p_lock_duration_minutes: lockDurationMinutes
+  })
+
+  if (error) {
+    console.error('Error acquiring sync lock:', error)
+    return false
+  }
+
+  if (acquired) {
+    console.log(`Acquired sync lock on folder ${folderId} for ${lockDurationMinutes} minutes`)
+  } else {
+    console.log(`Sync lock already held on folder ${folderId}, skipping`)
+  }
+
+  return acquired || false
+}
+
+/**
+ * Release the sync lock on a folder.
+ *
+ * Should be called in a finally block after sync completes or fails
+ * to ensure the lock is always released.
+ *
+ * @param {string} folderId - The folder ID to unlock
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
+ */
+export async function releaseSyncLock(folderId) {
+  const { error } = await supabase.rpc('release_sync_lock', {
+    p_folder_id: folderId
+  })
+
+  if (error) {
+    console.error('Error releasing sync lock:', error)
+  } else {
+    console.log(`Released sync lock on folder ${folderId}`)
   }
 }

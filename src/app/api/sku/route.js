@@ -3,18 +3,35 @@
  * GET /api/sku?q=A1234 - Search for SKU information
  */
 
+import { z } from 'zod'
 import { searchSKU, extractSKUs } from '@/lib/skuLookup'
+import {
+  ErrorCode,
+  apiError,
+  apiSuccess,
+  requireAuth,
+  validateParams,
+  generateRequestId,
+  sanitizeError
+} from '@/lib/apiUtils'
+
+const skuQuerySchema = z.object({
+  q: z.string().min(1, 'Query parameter "q" is required').max(200)
+})
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url)
-  const query = searchParams.get('q')
+  const requestId = generateRequestId()
 
-  if (!query) {
-    return Response.json(
-      { error: 'Query parameter "q" is required' },
-      { status: 400 }
-    )
-  }
+  // Auth check
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  // Validate query params
+  const { searchParams } = new URL(request.url)
+  const { data: params, errorResponse: validationError } = validateParams(searchParams, skuQuerySchema)
+  if (validationError) return validationError
+
+  const query = params.q
 
   // Extract SKUs from the query
   let skus = extractSKUs(query)
@@ -25,22 +42,23 @@ export async function GET(request) {
   }
 
   try {
-    // Search for each SKU
     const results = await Promise.all(
       skus.map(sku => searchSKU(sku))
     )
 
-    return Response.json({
+    return apiSuccess({
       query,
       skus,
       results,
       totalMatches: results.reduce((sum, r) => sum + r.totalResults, 0)
-    })
+    }, requestId)
   } catch (error) {
     console.error('SKU lookup error:', error)
-    return Response.json(
-      { error: 'Failed to search for SKU' },
-      { status: 500 }
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to search for SKU'),
+      500,
+      requestId
     )
   }
 }

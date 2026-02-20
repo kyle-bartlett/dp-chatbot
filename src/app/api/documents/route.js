@@ -1,49 +1,70 @@
 /**
  * Document management API routes
- * GET - List all documents
- * POST - Add a new document from URL or manual text
+ * GET - List all documents (requires auth)
+ * POST - Add a new document from URL or manual text (requires auth)
  */
 
-import { v4 as uuidv4 } from 'uuid'
-import { auth } from '@/lib/auth'
+import { z } from 'zod'
+import { randomUUID } from 'crypto'
 import { fetchGoogleContent, extractDocId, detectDocType } from '@/lib/googleApi'
 import { processDocument } from '@/lib/chunker'
 import { generateEmbeddings } from '@/lib/embeddings'
-import { addDocument, addChunks, getDocuments, getStats } from '@/lib/vectorStore'
+import { addDocument, addChunks, removeDocument, getDocuments, getStats } from '@/lib/vectorStore'
+import {
+  ErrorCode,
+  apiError,
+  apiSuccess,
+  requireAuth,
+  validateBody,
+  generateRequestId,
+  sanitizeError,
+  safeError
+} from '@/lib/apiUtils'
+
+const documentPostSchema = z.object({
+  url: z.string().url('Invalid URL format').optional(),
+  title: z.string().max(500).optional(),
+  content: z.string().max(1_000_000, 'Content exceeds maximum length').optional(),
+  type: z.enum(['document', 'spreadsheet', 'text']).optional()
+}).refine(data => data.url || data.content, {
+  message: 'Either url or content is required'
+})
 
 export async function GET() {
+  const requestId = generateRequestId()
+
+  // Auth check
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
   try {
     const documents = await getDocuments()
     const stats = await getStats()
 
-    return Response.json({
-      documents,
-      stats
-    })
+    return apiSuccess({ documents, stats }, requestId)
   } catch (error) {
     console.error('Error listing documents:', error)
-    return Response.json(
-      { error: 'Failed to list documents' },
-      { status: 500 }
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to list documents'),
+      500,
+      requestId
     )
   }
 }
 
 export async function POST(request) {
+  const requestId = generateRequestId()
+
+  // Auth check
+  const { session, errorResponse: authError } = await requireAuth()
+  if (authError) return authError
+
+  // Validate request body
+  const { data: body, errorResponse: validationError } = await validateBody(request, documentPostSchema)
+  if (validationError) return validationError
+
   try {
-    // Get user session for OAuth token
-    const session = await auth()
-
-    // Debug logging to trace OAuth flow
-    console.log('=== Document Upload Debug ===')
-    console.log('Session exists:', !!session)
-    console.log('Session user:', session?.user?.email || 'NO USER')
-    console.log('Session accessToken exists:', !!session?.accessToken)
-    console.log('Session accessToken length:', session?.accessToken?.length || 0)
-    console.log('Session error:', session?.error || 'none')
-    console.log('=============================')
-
-    const body = await request.json()
     const { url, title: customTitle, content: manualContent, type: manualType } = body
 
     let docData
@@ -51,27 +72,31 @@ export async function POST(request) {
 
     // Option 1: Fetch from Google URL
     if (url) {
-      // Validate it's a Google URL
       if (!url.includes('docs.google.com')) {
-        return Response.json(
-          { error: 'Only Google Docs and Sheets URLs are supported' },
-          { status: 400 }
+        return apiError(
+          ErrorCode.VALIDATION_ERROR,
+          'Only Google Docs and Sheets URLs are supported',
+          400,
+          requestId
         )
       }
 
-      // Require authentication for Google URLs
-      if (!session?.accessToken) {
-        return Response.json(
-          { error: 'Please sign in with your Google account to import Google documents' },
-          { status: 401 }
+      if (!session.accessToken) {
+        return apiError(
+          ErrorCode.UNAUTHORIZED,
+          'Please sign in with your Google account to import Google documents',
+          401,
+          requestId
         )
       }
 
       const googleDocId = extractDocId(url)
       if (!googleDocId) {
-        return Response.json(
-          { error: 'Could not extract document ID from URL' },
-          { status: 400 }
+        return apiError(
+          ErrorCode.VALIDATION_ERROR,
+          'Could not extract document ID from URL',
+          400,
+          requestId
         )
       }
 
@@ -81,43 +106,39 @@ export async function POST(request) {
         docData.url = url
       } catch (googleError) {
         console.error('Error fetching Google content:', googleError)
-        // Re-throw with more context
-        if (googleError.message.includes('404') || googleError.message.includes('not found')) {
-          return Response.json(
-            { 
-              error: `Document not found. Please check the URL and ensure you have access to the document.`,
-              details: googleError.message
-            },
-            { status: 404 }
+        if (googleError.message?.includes('404') || googleError.message?.includes('not found')) {
+          return apiError(
+            ErrorCode.NOT_FOUND,
+            'Document not found. Please check the URL and ensure you have access.',
+            404,
+            requestId
           )
         }
-        if (googleError.message.includes('403') || googleError.message.includes('Access denied')) {
-          return Response.json(
-            { 
-              error: `Access denied. Please ensure you have permission to view this document and are signed in with the correct Google account.`,
-              details: googleError.message
-            },
-            { status: 403 }
+        if (googleError.message?.includes('403') || googleError.message?.includes('Access denied')) {
+          return apiError(
+            ErrorCode.FORBIDDEN,
+            'Access denied. Please ensure you have permission to view this document.',
+            403,
+            requestId
           )
         }
-        throw googleError
+        return apiError(
+          ErrorCode.EXTERNAL_SERVICE_ERROR,
+          sanitizeError(googleError, 'Failed to fetch document from Google'),
+          502,
+          requestId
+        )
       }
     }
     // Option 2: Manual content
     else if (manualContent) {
-      docId = uuidv4()
+      docId = randomUUID()
       docData = {
         title: customTitle || 'Manual Document',
         type: manualType || 'document',
         content: manualContent,
         fetchedAt: new Date().toISOString()
       }
-    }
-    else {
-      return Response.json(
-        { error: 'Either url or content is required' },
-        { status: 400 }
-      )
     }
 
     // Override title if provided
@@ -133,49 +154,36 @@ export async function POST(request) {
       url: docData.url,
       fetchedAt: docData.fetchedAt
     }
-    
+
     // Ensure document is saved before processing chunks
     let savedDocument
     try {
       savedDocument = await addDocument(document)
       if (!savedDocument || !savedDocument.id) {
-        throw new Error('Failed to save document: no document returned')
+        throw safeError('Failed to save document metadata')
       }
-      // Use the saved document ID to ensure consistency
       docId = savedDocument.id
-      console.log('Document saved successfully:', docId, 'Type:', typeof docId)
     } catch (docError) {
       console.error('Error saving document:', docError)
-      return Response.json(
-        { 
-          error: 'Failed to save document metadata',
-          details: docError.message
-        },
-        { status: 500 }
+      return apiError(
+        ErrorCode.INTERNAL_ERROR,
+        sanitizeError(docError, 'Failed to save document metadata'),
+        500,
+        requestId
       )
     }
 
     // Process into chunks
     let chunks
     if (docData.type === 'spreadsheet') {
-      // Process each sheet
       chunks = []
       if (docData.content && typeof docData.content === 'object') {
         for (const [sheetName, rows] of Object.entries(docData.content)) {
-          // Validate rows is an array
-          if (!Array.isArray(rows)) {
-            console.warn(`Skipping sheet "${sheetName}": content is not an array`)
-            continue
-          }
-
-          // Skip empty sheets
-          if (rows.length === 0) {
-            console.warn(`Skipping empty sheet "${sheetName}"`)
-            continue
-          }
+          if (!Array.isArray(rows)) continue
+          if (rows.length === 0) continue
 
           const sheetDoc = {
-            id: docId, // Use parent document ID, not sheet-specific ID
+            id: docId,
             title: `${docData.title} - ${sheetName}`,
             type: 'spreadsheet',
             content: rows,
@@ -184,8 +192,6 @@ export async function POST(request) {
           const sheetChunks = processDocument(sheetDoc)
           chunks.push(...sheetChunks)
         }
-      } else {
-        console.error('Spreadsheet content is not in expected format:', typeof docData.content)
       }
     } else {
       chunks = processDocument({
@@ -199,170 +205,129 @@ export async function POST(request) {
 
     // Generate embeddings
     if (chunks.length > 0) {
-      // Filter out chunks with invalid or empty text
-      const validChunks = chunks.filter(c => 
-        c && 
-        c.text && 
-        typeof c.text === 'string' && 
+      const validChunks = chunks.filter(c =>
+        c &&
+        c.text &&
+        typeof c.text === 'string' &&
         c.text.trim().length > 0
       )
 
       if (validChunks.length === 0) {
-        console.warn('No valid chunks with text content to embed')
-        return Response.json({
+        return apiSuccess({
           success: true,
           document,
           chunksCreated: 0,
           warning: 'Document processed but no valid text content found for embedding',
           stats: await getStats()
-        })
+        }, requestId)
       }
 
-      // Extract texts and validate they're all strings
       const texts = validChunks.map(c => {
-        if (!c || !c.text) {
-          console.warn('Chunk missing text property:', c)
-          return null
-        }
         const text = typeof c.text === 'string' ? c.text : String(c.text)
         return text.trim()
-      }).filter(text => text !== null && text.length > 0)
+      }).filter(text => text.length > 0)
 
       if (texts.length === 0) {
-        console.warn('No valid texts extracted from chunks')
-        return Response.json({
+        return apiSuccess({
           success: true,
           document,
           chunksCreated: 0,
           warning: 'No valid text content found in chunks for embedding',
           stats: await getStats()
-        })
+        }, requestId)
       }
 
-      // Validate all texts are strings before sending to OpenAI
-      const invalidTexts = texts.filter(t => typeof t !== 'string')
-      if (invalidTexts.length > 0) {
-        console.error('Found non-string texts:', invalidTexts.length)
-        console.error('Sample invalid texts:', invalidTexts.slice(0, 3))
-        return Response.json(
-          {
-            error: 'Invalid text format detected in chunks',
-            document,
-            chunksCreated: validChunks.length
-          },
-          { status: 500 }
-        )
-      }
-
-      console.log(`Generating embeddings for ${texts.length} texts`)
-      console.log(`First text preview: ${texts[0]?.substring(0, 100)}...`)
-
-      // Check if OpenAI key is configured
       if (!process.env.OPENAI_API_KEY) {
-        return Response.json(
-          {
-            error: 'OpenAI API key not configured. Add OPENAI_API_KEY to your .env.local file for embeddings.',
-            document,
-            chunks: texts.length
-          },
-          { status: 500 }
+        // ROLLBACK: Remove the orphaned document
+        try {
+          await removeDocument(savedDocument.id || docId)
+        } catch (rollbackErr) {
+          console.error('Failed to rollback document:', rollbackErr)
+        }
+        return apiError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Embedding service is not configured. The document was not saved.',
+          503,
+          requestId
         )
       }
 
-      const embeddings = await generateEmbeddings(texts)
-      
-      // Ensure embeddings match valid chunks
-      if (embeddings.length !== validChunks.length) {
-        console.error(`Embedding count mismatch: ${embeddings.length} embeddings for ${validChunks.length} chunks`)
-        return Response.json(
-          { 
-            error: 'Failed to generate embeddings for all chunks',
-            document,
-            chunksCreated: validChunks.length,
-            embeddingsGenerated: embeddings.length
-          },
-          { status: 500 }
-        )
-      }
-
-      // Verify all chunks reference the correct document ID
-      // Use the exact ID from the saved document to ensure type consistency
       const finalDocId = savedDocument.id || docId
-      console.log('Using document ID for chunks:', finalDocId, 'Type:', typeof finalDocId)
-      
+
+      // Fix chunk document IDs if mismatched
       const allChunksHaveCorrectDocId = validChunks.every(chunk => chunk.documentId === finalDocId)
       if (!allChunksHaveCorrectDocId) {
-        console.warn('Chunk document ID mismatch detected - fixing...')
-        console.warn('Expected docId:', finalDocId, 'Type:', typeof finalDocId)
-        console.warn('Chunk documentIds (first 5):', validChunks.map(c => ({ id: c.documentId, type: typeof c.documentId })).slice(0, 5))
-        // Fix the document IDs to match exactly what's in the database
         validChunks.forEach(chunk => {
           chunk.documentId = finalDocId
         })
-        console.log('Fixed all chunk document IDs to:', finalDocId)
+      }
+
+      let embeddings
+      try {
+        embeddings = await generateEmbeddings(texts)
+      } catch (embeddingError) {
+        console.error('Error generating embeddings:', embeddingError)
+        try {
+          await removeDocument(finalDocId)
+        } catch (rollbackErr) {
+          console.error('Failed to rollback document:', rollbackErr)
+        }
+        return apiError(
+          ErrorCode.EXTERNAL_SERVICE_ERROR,
+          sanitizeError(embeddingError, 'Failed to generate embeddings. The document was not saved.'),
+          502,
+          requestId
+        )
+      }
+
+      if (embeddings.length !== validChunks.length) {
+        console.error(`Embedding count mismatch: ${embeddings.length} embeddings for ${validChunks.length} chunks`)
+        try {
+          await removeDocument(finalDocId)
+        } catch (rollbackErr) {
+          console.error('Failed to rollback document:', rollbackErr)
+        }
+        return apiError(
+          ErrorCode.INTERNAL_ERROR,
+          'Failed to generate embeddings for all chunks. The document was not saved.',
+          500,
+          requestId
+        )
       }
 
       try {
         await addChunks(validChunks, embeddings)
-        console.log(`Successfully added ${validChunks.length} chunks for document ${finalDocId}`)
       } catch (chunkError) {
         console.error('Error adding chunks:', chunkError)
-        console.error('Document ID that failed:', finalDocId)
-        console.error('Document ID type:', typeof finalDocId)
-        // If chunks fail, we should still return the document info
-        // but indicate the chunks failed
-        return Response.json(
-          { 
-            error: 'Document saved but failed to add chunks',
-            details: chunkError.message,
-            document,
-            documentId: finalDocId,
-            chunksCreated: validChunks.length
-          },
-          { status: 500 }
+        try {
+          await removeDocument(finalDocId)
+        } catch (rollbackErr) {
+          console.error('Failed to rollback document:', rollbackErr)
+        }
+        return apiError(
+          ErrorCode.INTERNAL_ERROR,
+          sanitizeError(chunkError, 'Failed to save document chunks. The document was not saved.'),
+          500,
+          requestId
         )
       }
     }
 
-    // Get updated stats
     const stats = await getStats()
 
-    return Response.json({
+    return apiSuccess({
       success: true,
       document,
       chunksCreated: chunks.length,
       stats
-    })
+    }, requestId)
   } catch (error) {
     console.error('Error adding document:', error)
-    
-    // Handle specific error types
-    if (error.message?.includes('OpenAI') || error.message?.includes('embedding')) {
-      return Response.json(
-        { 
-          error: 'Failed to generate embeddings. Please check your OpenAI API key and try again.',
-          details: error.message
-        },
-        { status: 500 }
-      )
-    }
-    
-    if (error.message?.includes('Supabase') || error.message?.includes('database')) {
-      return Response.json(
-        { 
-          error: 'Database error. Please check your Supabase configuration.',
-          details: error.message
-        },
-        { status: 500 }
-      )
-    }
-
-    return Response.json(
-      { 
-        error: error.message || 'Failed to add document',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
-      { status: 500 }
+    return apiError(
+      ErrorCode.INTERNAL_ERROR,
+      sanitizeError(error, 'Failed to add document'),
+      500,
+      requestId
     )
   }
 }

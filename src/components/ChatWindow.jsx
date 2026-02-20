@@ -74,6 +74,10 @@ export default function ChatWindow() {
     { id: 1, content: WELCOME_MESSAGE, isUser: false, sources: [] }
   ])
   const [isLoading, setIsLoading] = useState(false)
+  // Immediate guard against double-submit. React's setState is asynchronous
+  // (batched), so isLoading may still be false when a rapid second click fires.
+  // This ref is set synchronously before any async work begins.
+  const isSubmittingRef = useRef(false)
   const messagesEndRef = useRef(null)
 
   // Load chat history from localStorage on mount
@@ -111,6 +115,12 @@ export default function ChatWindow() {
   }, [messages, isLoading])
 
   const handleSendMessage = async (content) => {
+    // Synchronous guard: prevents double-submit before React re-renders.
+    // This catches rapid clicks/enters that happen before setIsLoading(true)
+    // takes effect in the DOM.
+    if (isSubmittingRef.current) return
+    isSubmittingRef.current = true
+
     // Add user message
     const userMessage = { id: Date.now(), content, isUser: true }
     setMessages(prev => [...prev, userMessage])
@@ -147,13 +157,14 @@ export default function ChatWindow() {
       console.error('Chat error:', error)
       const errorMessage = {
         id: Date.now() + 1,
-        content: "I'm sorry, I encountered an error. Please make sure the API is configured correctly and try again. 🎄",
+        content: "I'm sorry, I encountered an error. Please make sure the API is configured correctly and try again.",
         isUser: false,
         sources: []
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+      isSubmittingRef.current = false
     }
   }
 

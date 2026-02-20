@@ -5,6 +5,9 @@
  */
 
 import { google } from 'googleapis'
+import { withTimeout, withRetry } from './apiUtils'
+
+const GOOGLE_API_TIMEOUT_MS = 30_000 // 30 seconds per Google API call
 
 /**
  * Create OAuth2 client with user's access token
@@ -67,10 +70,15 @@ export async function fetchSpreadsheet(spreadsheetId, accessToken) {
   })
 
   try {
-    // Get spreadsheet metadata first
-    const metadata = await sheets.spreadsheets.get({
-      spreadsheetId
-    })
+    // Get spreadsheet metadata first (with timeout + retry)
+    const metadata = await withRetry(
+      () => withTimeout(
+        sheets.spreadsheets.get({ spreadsheetId }),
+        GOOGLE_API_TIMEOUT_MS,
+        'Sheets metadata fetch'
+      ),
+      { maxRetries: 2, baseDelayMs: 1000 }
+    )
 
     const title = metadata.data.properties?.title || 'Untitled Spreadsheet'
     const sheetNames = metadata.data.sheets?.map(s => s.properties?.title) || ['Sheet1']
@@ -78,10 +86,14 @@ export async function fetchSpreadsheet(spreadsheetId, accessToken) {
     // Fetch all sheets
     const allData = {}
     for (const sheetName of sheetNames) {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: sheetName
-      })
+      const response = await withRetry(
+        () => withTimeout(
+          sheets.spreadsheets.values.get({ spreadsheetId, range: sheetName }),
+          GOOGLE_API_TIMEOUT_MS,
+          `Sheets data fetch (${sheetName})`
+        ),
+        { maxRetries: 2, baseDelayMs: 1000 }
+      )
       allData[sheetName] = response.data.values || []
     }
 
@@ -122,9 +134,14 @@ export async function fetchDocument(documentId, accessToken) {
   })
 
   try {
-    const response = await docs.documents.get({
-      documentId
-    })
+    const response = await withRetry(
+      () => withTimeout(
+        docs.documents.get({ documentId }),
+        GOOGLE_API_TIMEOUT_MS,
+        'Docs content fetch'
+      ),
+      { maxRetries: 2, baseDelayMs: 1000 }
+    )
 
     const doc = response.data
     const title = doc.title || 'Untitled Document'

@@ -74,8 +74,9 @@ export function UserMenu() {
   }
 
   // Signed in user
-  const initials = session.user.name
-    ?.split(' ')
+  const initials = (session.user.name || '')
+    .split(' ')
+    .filter(Boolean)
     .map(n => n[0])
     .join('')
     .toUpperCase()

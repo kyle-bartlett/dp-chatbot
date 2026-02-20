@@ -188,36 +188,35 @@ export function processSheet(sheetData, sheetName, documentMetadata) {
 }
 
 /**
- * Store structured records in database
+ * Store structured records in database (atomic replace).
+ *
+ * Uses the replace_structured_data Postgres function to perform the
+ * delete-old + insert-new operation within a single transaction, with
+ * a FOR UPDATE lock on the parent document row. This prevents the race
+ * condition where two concurrent calls could interleave their DELETE
+ * and INSERT operations, causing record duplication.
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
  */
 export async function storeStructuredData(records, documentId) {
   if (!records || records.length === 0) {
     return { stored: 0, errors: 0 }
   }
 
-  // First, delete existing records for this document to avoid duplicates
-  const { error: deleteError } = await supabase
-    .from('structured_data')
-    .delete()
-    .eq('document_id', documentId)
+  console.log(`Atomically replacing ${records.length} structured records for document ${documentId}`)
 
-  if (deleteError) {
-    console.error('Error deleting old structured data:', deleteError)
-  }
-
-  // Insert new records
-  const { data, error } = await supabase
-    .from('structured_data')
-    .insert(records)
+  const { data: insertedCount, error } = await supabase.rpc('replace_structured_data', {
+    p_document_id: documentId,
+    p_records: records
+  })
 
   if (error) {
-    console.error('Error inserting structured data:', error)
+    console.error('Error in atomic structured data replacement:', error)
     return { stored: 0, errors: records.length, error }
   }
 
-  console.log(`Stored ${records.length} structured records for document ${documentId}`)
-  
-  return { stored: records.length, errors: 0 }
+  console.log(`Stored ${insertedCount} structured records for document ${documentId}`)
+  return { stored: insertedCount, errors: 0 }
 }
 
 /**

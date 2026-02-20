@@ -7,6 +7,7 @@
 import { supabase } from './supabaseClient'
 import { searchSimilar } from './vectorStore'
 import { getEmbedding } from './embeddings'
+import { escapeFilterValue } from './apiUtils'
 
 /**
  * Detect query intent and type
@@ -92,12 +93,14 @@ export async function searchStructuredData(query, context = {}) {
       dbQuery = dbQuery.lte('date', filters.dateTo)
     }
 
-    // Text search across key fields
+    // Text search across key fields — escape user input to prevent filter injection
     if (query && query.length > 2) {
-      // Use text search if available, otherwise use ilike
-      dbQuery = dbQuery.or(
-        `sku.ilike.%${query}%,category.ilike.%${query}%,notes.ilike.%${query}%,sheet_name.ilike.%${query}%`
-      )
+      const safeQuery = escapeFilterValue(query)
+      if (safeQuery.length > 0) {
+        dbQuery = dbQuery.or(
+          `sku.ilike.%${safeQuery}%,category.ilike.%${safeQuery}%,notes.ilike.%${safeQuery}%,sheet_name.ilike.%${safeQuery}%`
+        )
+      }
     }
 
     // Order and limit

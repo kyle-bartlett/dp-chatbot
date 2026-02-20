@@ -180,3 +180,9 @@ export function processDocument(doc) {
       createdAt: new Date().toISOString()
     }))
 }
+
+/**
+ * Export alias for backward compatibility.
+ * Used by src/app/api/sync/route.js which imports 'chunkDocument'.
+ */
+export const chunkDocument = processDocument

@@ -70,14 +70,22 @@ export async function getDocuments() {
 
   if (error) {
     console.error('Error fetching documents:', error)
-    return []
+    throw new Error('Failed to fetch documents from database')
   }
 
-  return data
+  return data || []
 }
 
 /**
- * Add chunks with embeddings to the vector store
+ * Add chunks with embeddings to the vector store (atomic replace).
+ *
+ * Uses the replace_document_chunks Postgres function to perform the
+ * delete-old + insert-new operation within a single transaction, with
+ * a FOR UPDATE lock on the parent document row. This prevents the race
+ * condition where two concurrent calls could interleave their DELETE
+ * and INSERT operations, causing chunk loss or duplication.
+ *
+ * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
  */
 export async function addChunks(chunks, embeddings) {
   if (!chunks || chunks.length === 0) return
@@ -97,23 +105,10 @@ export async function addChunks(chunks, embeddings) {
     throw new Error(`Document with ID "${docId}" does not exist in the database. Please save the document first.`)
   }
 
-  console.log(`Verified document exists: ${docId}`)
-
-  // First, delete existing chunks for this document to avoid duplicates/stale chunks
-  const { error: deleteError } = await supabase
-    .from('document_chunks')
-    .delete()
-    .eq('document_id', docId)
-
-  if (deleteError) {
-    console.error('Error clearing old chunks:', deleteError)
-    throw deleteError
-  }
-
-  // Prepare rows for insertion
-  const rows = chunks.map((chunk, index) => ({
-    document_id: docId,
-    content: chunk.text, // Assuming 'text' is the content field in chunk object
+  // Prepare chunk data as JSONB for the atomic RPC function.
+  // Each element must include: content, chunk_index, embedding, metadata.
+  const chunkData = chunks.map((chunk, index) => ({
+    content: chunk.text,
     chunk_index: index,
     embedding: embeddings[index],
     metadata: {
@@ -123,23 +118,21 @@ export async function addChunks(chunks, embeddings) {
     }
   }))
 
-  console.log(`Inserting ${rows.length} chunks for document ${docId}`)
-  console.log(`First chunk document_id: ${rows[0]?.document_id}`)
-  console.log(`Document ID type: ${typeof docId}, value: ${docId}`)
+  console.log(`Atomically replacing ${chunkData.length} chunks for document ${docId}`)
 
-  const { error: insertError } = await supabase
-    .from('document_chunks')
-    .insert(rows)
+  const { data: insertedCount, error } = await supabase.rpc('replace_document_chunks', {
+    p_document_id: docId,
+    p_chunks: chunkData
+  })
 
-  if (insertError) {
-    console.error('Error inserting chunks:', insertError)
-    console.error('Document ID used:', docId)
-    console.error('Document ID type:', typeof docId)
-    console.error('First row document_id:', rows[0]?.document_id)
-    throw insertError
+  if (error) {
+    console.error('Error in atomic chunk replacement:', error)
+    console.error('Document ID:', docId, 'Type:', typeof docId)
+    console.error('Chunk count:', chunkData.length)
+    throw error
   }
 
-  console.log(`Successfully inserted ${rows.length} chunks`)
+  console.log(`Successfully replaced chunks: ${insertedCount} inserted for document ${docId}`)
 }
 
 /**
@@ -268,9 +261,5 @@ export async function getStats() {
   }
 }
 
-/**
- * Clear all data (for testing/reset)
- */
-export async function clearAll() {
-  await supabase.from('documents').delete().neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
-}
+// clearAll removed — too dangerous for production use.
+// If needed for development/testing, run SQL directly in Supabase dashboard.

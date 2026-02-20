@@ -46,7 +46,7 @@ export async function searchSKU(sku) {
       exactMatches: [],
       relatedInfo: [],
       totalResults: 0,
-      error: error.message
+      error: 'SKU search failed'
     }
   }
 }
