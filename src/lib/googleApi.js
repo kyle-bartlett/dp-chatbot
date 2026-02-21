@@ -4,7 +4,8 @@
  * Supports OAuth tokens from authenticated users
  */
 
-import { google } from 'googleapis'
+import { sheets, auth as sheetsAuth } from '@googleapis/sheets'
+import { docs } from '@googleapis/docs'
 import { withTimeout, withRetry } from './apiUtils'
 
 const GOOGLE_API_TIMEOUT_MS = 30_000 // 30 seconds per Google API call
@@ -14,7 +15,7 @@ const GOOGLE_API_TIMEOUT_MS = 30_000 // 30 seconds per Google API call
  * @param {string} accessToken - User's OAuth access token from session
  */
 function createOAuthClient(accessToken) {
-  const oauth2Client = new google.auth.OAuth2(
+  const oauth2Client = new sheetsAuth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET
   )
