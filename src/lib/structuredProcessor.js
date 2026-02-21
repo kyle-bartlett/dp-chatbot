@@ -1,15 +1,18 @@
 /**
  * Structured Data Processor
- * Processes Google Sheets into structured database records
- * Handles forecasts, pipeline data, inventory, CPFR, etc.
+ * Processes Google Sheets into structured database records.
+ *
+ * Supports two modes:
+ * 1. LLM analysis-driven parsing (Phase 2) — uses Claude to detect headers, types, and structure
+ * 2. Regex-based fallback — the original detection for when no analysis is available
  */
 
 import { supabase } from './supabaseClient'
 
 /**
- * Detect sheet type based on headers
+ * Detect sheet type based on headers (FALLBACK — used when no LLM analysis available)
  */
-export function detectSheetType(headers) {
+export function detectSheetTypeFallback(headers) {
   const headerStr = headers.join('|').toLowerCase()
 
   if (headerStr.match(/forecast|demand|projection|wo1|wo2|wo3|wo4/)) {
@@ -34,12 +37,15 @@ export function detectSheetType(headers) {
   return 'general'
 }
 
+// Keep old name as alias for backward compatibility
+export const detectSheetType = detectSheetTypeFallback
+
 /**
  * Normalize header names
  */
 function normalizeHeader(header) {
   if (!header) return ''
-  
+
   return header
     .toLowerCase()
     .trim()
@@ -48,7 +54,7 @@ function normalizeHeader(header) {
 }
 
 /**
- * Map row data to normalized structure
+ * Map row data to normalized structure (FALLBACK — regex-based)
  */
 function mapRowToStructure(row, headers, sheetType) {
   const normalized = {}
@@ -57,7 +63,7 @@ function mapRowToStructure(row, headers, sheetType) {
   headers.forEach((header, idx) => {
     const normalizedHeader = normalizeHeader(header)
     const value = row[idx]
-    
+
     if (normalizedHeader && value !== undefined && value !== null && value !== '') {
       normalized[normalizedHeader] = value
     }
@@ -145,34 +151,183 @@ function mapRowToStructure(row, headers, sheetType) {
 }
 
 /**
- * Process a Google Sheet into structured records
+ * Process a sheet using LLM analysis results (Phase 2 — primary path).
+ * Uses the analysis to correctly identify headers, data rows, and column semantics
+ * regardless of where headers are in the sheet.
+ *
+ * @param {Array<Array>} rows - All rows from the sheet
+ * @param {string} sheetName - Tab name
+ * @param {Object} analysis - LLM analysis from documentAnalyzer
+ * @param {Object} documentMetadata - Document metadata (id, title, url, teamContext)
+ * @returns {Array} Structured records
+ */
+export function processSheetWithAnalysis(rows, sheetName, analysis, documentMetadata) {
+  if (!rows || rows.length === 0 || !analysis) {
+    return []
+  }
+
+  const headerRow = analysis.header_row ?? 0
+  const dataStartRow = analysis.data_start_row ?? (headerRow + 1)
+  const sheetType = analysis.sheet_type || 'general'
+  const columns = analysis.columns || []
+
+  // Build column mapping from analysis
+  const columnMap = {}
+  for (const col of columns) {
+    columnMap[col.index] = col
+  }
+
+  // Get headers from the identified header row
+  const headers = rows[headerRow] || []
+
+  const records = []
+
+  for (let i = dataStartRow; i < rows.length; i++) {
+    const row = rows[i]
+
+    // Skip empty rows
+    if (!row || row.every(cell => !cell || cell.toString().trim() === '')) {
+      continue
+    }
+
+    // Build normalized data using LLM column analysis
+    const normalized = {}
+    row.forEach((cell, idx) => {
+      const colInfo = columnMap[idx]
+      if (colInfo && cell !== undefined && cell !== null && cell !== '') {
+        const key = colInfo.normalized_name || normalizeHeader(headers[idx] || `col_${idx}`)
+        let value = cell
+
+        // Type coercion based on LLM analysis
+        if (colInfo.data_type === 'number' || colInfo.data_type === 'currency') {
+          const parsed = parseFloat(String(value).replace(/[$,]/g, ''))
+          if (!isNaN(parsed)) value = parsed
+        } else if (colInfo.data_type === 'percentage') {
+          const parsed = parseFloat(String(value).replace(/%/g, ''))
+          if (!isNaN(parsed)) value = parsed
+        }
+
+        normalized[key] = value
+      } else if (cell !== undefined && cell !== null && cell !== '') {
+        // Fallback for columns not in analysis
+        const key = normalizeHeader(headers[idx] || `col_${idx}`)
+        if (key) normalized[key] = cell
+      }
+    })
+
+    // Extract key fields using analysis key_columns
+    const record = {
+      sheet_type: sheetType,
+      sku: null,
+      category: null,
+      date: null,
+      week: null,
+      raw_data: normalized,
+      document_id: documentMetadata.documentId,
+      document_title: documentMetadata.documentTitle,
+      document_url: documentMetadata.documentUrl,
+      sheet_name: sheetName,
+      team_context: documentMetadata.teamContext || 'general',
+      row_index: i
+    }
+
+    // Map key columns from analysis
+    for (const keyIdx of (analysis.key_columns || [])) {
+      const colInfo = columnMap[keyIdx]
+      if (!colInfo) continue
+      const value = row[keyIdx]
+      if (value === undefined || value === null || value === '') continue
+
+      const name = colInfo.normalized_name || ''
+      if (name.includes('sku') || name.includes('asin') || name.includes('item') || name.includes('product')) {
+        record.sku = String(value)
+      } else if (name.includes('date') || name.includes('period') || name.includes('month')) {
+        record.date = String(value)
+      } else if (name.includes('week')) {
+        record.week = String(value)
+      } else if (name.includes('category') || name.includes('type') || name.includes('line')) {
+        record.category = String(value)
+      }
+    }
+
+    // Fallback: try to extract SKU/date from normalized data if not found via key_columns
+    if (!record.sku) {
+      for (const [key, val] of Object.entries(normalized)) {
+        if (key.includes('sku') || key.includes('asin') || key === 'item_code' || key === 'product_id') {
+          record.sku = String(val)
+          break
+        }
+      }
+    }
+    if (!record.date && !record.week) {
+      for (const [key, val] of Object.entries(normalized)) {
+        if (key.includes('date') || key === 'period' || key === 'month') {
+          record.date = String(val)
+          break
+        }
+        if (key.includes('week')) {
+          record.week = String(val)
+          break
+        }
+      }
+    }
+
+    // Copy type-specific numeric fields into record
+    // Guard: never overwrite reserved record fields with spreadsheet data
+    const reservedFields = new Set([
+      'sku', 'category', 'date', 'week', 'raw_data',
+      'document_id', 'document_title', 'document_url',
+      'sheet_name', 'team_context', 'row_index', 'sheet_type', 'notes'
+    ])
+    for (const [key, val] of Object.entries(normalized)) {
+      if (typeof val === 'number' && !reservedFields.has(key)) {
+        record[key] = val
+      }
+    }
+
+    // Notes
+    for (const [key, val] of Object.entries(normalized)) {
+      if (key.includes('note') || key.includes('comment') || key.includes('remark')) {
+        record.notes = String(val)
+        break
+      }
+    }
+
+    records.push(record)
+  }
+
+  return records
+}
+
+/**
+ * Process a Google Sheet into structured records (FALLBACK — regex-based)
  */
 export function processSheet(sheetData, sheetName, documentMetadata) {
   const rows = sheetData[sheetName]
-  
+
   if (!rows || rows.length === 0) {
     return []
   }
 
   // First row is typically headers
   const headers = rows[0]
-  
+
   // Detect what type of sheet this is
-  const sheetType = detectSheetType(headers)
+  const sheetType = detectSheetTypeFallback(headers)
 
   const records = []
 
   // Process each data row (skip header)
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
-    
+
     // Skip empty rows
     if (!row || row.every(cell => !cell || cell.toString().trim() === '')) {
       continue
     }
 
     const record = mapRowToStructure(row, headers, sheetType)
-    
+
     // Add document metadata
     record.document_id = documentMetadata.documentId
     record.document_title = documentMetadata.documentTitle
@@ -189,14 +344,6 @@ export function processSheet(sheetData, sheetName, documentMetadata) {
 
 /**
  * Store structured records in database (atomic replace).
- *
- * Uses the replace_structured_data Postgres function to perform the
- * delete-old + insert-new operation within a single transaction, with
- * a FOR UPDATE lock on the parent document row. This prevents the race
- * condition where two concurrent calls could interleave their DELETE
- * and INSERT operations, causing record duplication.
- *
- * Requires: DATABASE_MIGRATION_001_CONCURRENCY.sql must be applied.
  */
 export async function storeStructuredData(records, documentId) {
   if (!records || records.length === 0) {
@@ -220,25 +367,47 @@ export async function storeStructuredData(records, documentId) {
 }
 
 /**
- * Process and store a complete spreadsheet
+ * Process and store a complete spreadsheet.
+ * Uses LLM analysis when available, falls back to regex-based parsing otherwise.
+ *
+ * @param {Object} spreadsheetContent - { content, sheets, title }
+ * @param {Object} documentMetadata - { documentId, documentTitle, documentUrl, teamContext }
+ * @param {Object} analyses - Optional map of sheetName -> LLM analysis objects
  */
-export async function processAndStoreSpreadsheet(spreadsheetContent, documentMetadata) {
+export async function processAndStoreSpreadsheet(spreadsheetContent, documentMetadata, analyses = null) {
   const { content, sheets, title } = spreadsheetContent
   const allRecords = []
 
   // Process each sheet
   for (const sheetName of sheets) {
     console.log(`Processing sheet: ${sheetName}`)
-    
-    const records = processSheet(content, sheetName, documentMetadata)
+
+    let records
+    const sheetAnalysis = analyses?.[sheetName]
+
+    if (sheetAnalysis) {
+      // Use LLM analysis-driven parsing
+      console.log(`Using LLM analysis for "${sheetName}" (type: ${sheetAnalysis.sheet_type})`)
+      records = processSheetWithAnalysis(
+        content[sheetName],
+        sheetName,
+        sheetAnalysis,
+        documentMetadata
+      )
+    } else {
+      // Fallback to regex-based parsing
+      console.log(`Using regex fallback for "${sheetName}"`)
+      records = processSheet(content, sheetName, documentMetadata)
+    }
+
     allRecords.push(...records)
-    
+
     console.log(`Extracted ${records.length} records from ${sheetName}`)
   }
 
   // Store all records
   const result = await storeStructuredData(allRecords, documentMetadata.documentId)
-  
+
   return {
     totalRecords: allRecords.length,
     stored: result.stored,

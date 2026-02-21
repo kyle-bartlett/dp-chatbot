@@ -4,8 +4,8 @@
  * Supports OAuth tokens from authenticated users
  */
 
-import { sheets, auth as sheetsAuth } from '@googleapis/sheets'
-import { docs } from '@googleapis/docs'
+import { sheets as sheetsApi, auth as sheetsAuth } from '@googleapis/sheets'
+import { docs as docsApi } from '@googleapis/docs'
 import { withTimeout, withRetry } from './apiUtils'
 
 const GOOGLE_API_TIMEOUT_MS = 30_000 // 30 seconds per Google API call
@@ -65,7 +65,7 @@ export async function fetchSpreadsheet(spreadsheetId, accessToken) {
 
   const auth = createOAuthClient(accessToken)
 
-  const sheets = google.sheets({
+  const sheetsClient = sheetsApi({
     version: 'v4',
     auth
   })
@@ -74,7 +74,7 @@ export async function fetchSpreadsheet(spreadsheetId, accessToken) {
     // Get spreadsheet metadata first (with timeout + retry)
     const metadata = await withRetry(
       () => withTimeout(
-        sheets.spreadsheets.get({ spreadsheetId }),
+        sheetsClient.spreadsheets.get({ spreadsheetId }),
         GOOGLE_API_TIMEOUT_MS,
         'Sheets metadata fetch'
       ),
@@ -89,7 +89,7 @@ export async function fetchSpreadsheet(spreadsheetId, accessToken) {
     for (const sheetName of sheetNames) {
       const response = await withRetry(
         () => withTimeout(
-          sheets.spreadsheets.values.get({ spreadsheetId, range: sheetName }),
+          sheetsClient.spreadsheets.values.get({ spreadsheetId, range: sheetName }),
           GOOGLE_API_TIMEOUT_MS,
           `Sheets data fetch (${sheetName})`
         ),
@@ -129,7 +129,7 @@ export async function fetchDocument(documentId, accessToken) {
 
   const auth = createOAuthClient(accessToken)
 
-  const docs = google.docs({
+  const docsClient = docsApi({
     version: 'v1',
     auth
   })
@@ -137,7 +137,7 @@ export async function fetchDocument(documentId, accessToken) {
   try {
     const response = await withRetry(
       () => withTimeout(
-        docs.documents.get({ documentId }),
+        docsClient.documents.get({ documentId }),
         GOOGLE_API_TIMEOUT_MS,
         'Docs content fetch'
       ),

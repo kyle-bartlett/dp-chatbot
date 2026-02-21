@@ -350,7 +350,7 @@ Your job is to:
   }
 
   // Add retrieved context
-  const { structured, semantic, queryType } = retrievalResults
+  const { structured, semantic, related } = retrievalResults
 
   if (structured.length > 0) {
     systemPrompt += `\n## Structured Data (Spreadsheets):\n`
@@ -366,7 +366,18 @@ Your job is to:
     })
   }
 
-  if (structured.length === 0 && semantic.length === 0) {
+  // Add related context from document relationships
+  if (related && related.length > 0) {
+    systemPrompt += `\n## Related Context (cross-tab/cross-document):\n`
+    related.slice(0, 5).forEach((item, idx) => {
+      const relLabel = item.relationshipDescription
+        ? ` (${item.relationship}: ${item.relationshipDescription})`
+        : item.relationship ? ` (${item.relationship})` : ''
+      systemPrompt += `\n[Related ${idx + 1}] ${item.source}${item.sheetName ? ` - ${item.sheetName}` : ''}${relLabel}\n${item.content}\n`
+    })
+  }
+
+  if (structured.length === 0 && semantic.length === 0 && (!related || related.length === 0)) {
     systemPrompt += `\nNo relevant data found in the knowledge base for this query.`
   }
 

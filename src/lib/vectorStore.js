@@ -156,11 +156,14 @@ function cosineSimilarity(a, b) {
 }
 
 /**
- * Search for similar chunks using cosine similarity
+ * Search for similar chunks using cosine similarity.
+ * Supports hierarchical retrieval: when a match is found, also fetches its parent chunk.
  * Uses client-side calculation as fallback when embeddings are stored as JSON strings
  */
 export async function searchSimilar(queryEmbedding, options = {}) {
-  const { topK = 5, minScore = 0.7 } = options
+  const { topK = 5, minScore = 0.7, includeParent = true } = options
+
+  let results = []
 
   // First try the RPC function (for when vector column is properly configured)
   const { data: rpcData, error: rpcError } = await supabase.rpc('match_documents', {
@@ -171,65 +174,101 @@ export async function searchSimilar(queryEmbedding, options = {}) {
 
   if (!rpcError && rpcData && rpcData.length > 0) {
     // RPC worked, use those results
-    return rpcData.map(match => ({
+    results = rpcData.map(match => ({
+      id: match.id,
       text: match.content,
       score: match.similarity,
       documentId: match.document_id,
       documentTitle: match.metadata?.documentTitle,
       documentUrl: match.metadata?.documentUrl,
-      metadata: match.metadata
+      metadata: match.metadata,
+      parentChunkId: match.parent_chunk_id,
+      chunkLevel: match.chunk_level,
+      sectionTitle: match.section_title
     }))
-  }
+  } else {
+    // Fallback: fetch all chunks and calculate similarity client-side
+    console.log('RPC failed or returned empty, using client-side similarity search')
+    if (rpcError) {
+      console.log('RPC error:', rpcError.message)
+    }
 
-  // Fallback: fetch all chunks and calculate similarity client-side
-  // This is less efficient but works when embeddings are stored as JSON strings
-  console.log('RPC failed or returned empty, using client-side similarity search')
-  if (rpcError) {
-    console.log('RPC error:', rpcError.message)
-  }
+    const { data: chunks, error: fetchError } = await supabase
+      .from('document_chunks')
+      .select('id, document_id, content, embedding, metadata, parent_chunk_id, chunk_level, section_title')
 
-  const { data: chunks, error: fetchError } = await supabase
-    .from('document_chunks')
-    .select('id, document_id, content, embedding, metadata')
+    if (fetchError || !chunks) {
+      console.error('Error fetching chunks for similarity search:', fetchError)
+      return []
+    }
 
-  if (fetchError || !chunks) {
-    console.error('Error fetching chunks for similarity search:', fetchError)
-    return []
-  }
+    console.log(`Fetched ${chunks.length} chunks for client-side similarity search`)
 
-  console.log(`Fetched ${chunks.length} chunks for client-side similarity search`)
-
-  // Calculate similarity for each chunk
-  const results = chunks
-    .map(chunk => {
-      // Parse embedding if it's a string (JSON array)
-      let embedding = chunk.embedding
-      if (typeof embedding === 'string') {
-        try {
-          embedding = JSON.parse(embedding)
-        } catch (e) {
-          console.error('Failed to parse embedding for chunk', chunk.id)
-          return null
+    results = chunks
+      .map(chunk => {
+        let embedding = chunk.embedding
+        if (typeof embedding === 'string') {
+          try {
+            embedding = JSON.parse(embedding)
+          } catch (e) {
+            console.error('Failed to parse embedding for chunk', chunk.id)
+            return null
+          }
         }
-      }
 
-      const score = cosineSimilarity(queryEmbedding, embedding)
-      return {
-        text: chunk.content,
-        score,
-        documentId: chunk.document_id,
-        documentTitle: chunk.metadata?.documentTitle,
-        documentUrl: chunk.metadata?.documentUrl,
-        metadata: chunk.metadata
-      }
-    })
-    .filter(r => r !== null && r.score >= minScore)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK)
+        const score = cosineSimilarity(queryEmbedding, embedding)
+        return {
+          id: chunk.id,
+          text: chunk.content,
+          score,
+          documentId: chunk.document_id,
+          documentTitle: chunk.metadata?.documentTitle,
+          documentUrl: chunk.metadata?.documentUrl,
+          metadata: chunk.metadata,
+          parentChunkId: chunk.parent_chunk_id,
+          chunkLevel: chunk.chunk_level,
+          sectionTitle: chunk.section_title
+        }
+      })
+      .filter(r => r !== null && r.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+  }
 
   console.log(`Found ${results.length} matching chunks with minScore >= ${minScore}`)
   if (results.length > 0) {
     console.log(`Top match score: ${results[0].score.toFixed(4)}, title: ${results[0].documentTitle}`)
+  }
+
+  // Hierarchical expansion: fetch parent chunks for context
+  if (includeParent && results.length > 0) {
+    const parentIds = [...new Set(
+      results
+        .filter(r => r.parentChunkId)
+        .map(r => r.parentChunkId)
+    )]
+
+    if (parentIds.length > 0) {
+      const { data: parentChunks } = await supabase
+        .from('document_chunks')
+        .select('id, content, metadata, section_title, chunk_level')
+        .in('id', parentIds)
+
+      if (parentChunks) {
+        const parentMap = new Map(parentChunks.map(p => [p.id, p]))
+
+        // Attach parent context to results
+        for (const result of results) {
+          if (result.parentChunkId) {
+            const parent = parentMap.get(result.parentChunkId)
+            if (parent) {
+              result.parentContext = parent.content
+              result.parentSectionTitle = parent.section_title
+            }
+          }
+        }
+      }
+    }
   }
 
   return results

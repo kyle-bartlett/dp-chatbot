@@ -1,7 +1,13 @@
 /**
  * Text chunking utilities for document processing
- * Splits documents into smaller, overlapping chunks for better retrieval
+ * Splits documents into smaller, overlapping chunks for better retrieval.
+ *
+ * Supports two strategies:
+ * - 'hierarchical': Content-aware chunking via hierarchicalChunker (Phase 4)
+ * - 'fixed': Original fixed-size chunking (backward compatible default)
  */
+
+import { chunkSheetByLogicalGroups, chunkDocumentBySections } from './hierarchicalChunker'
 
 const DEFAULT_CHUNK_SIZE = 1000  // characters
 const DEFAULT_OVERLAP = 200      // characters
@@ -74,7 +80,7 @@ export function chunkText(text, options = {}) {
 }
 
 /**
- * Chunk a Google Sheet into rows/sections
+ * Chunk a Google Sheet into rows/sections (fixed-size fallback)
  */
 export function chunkSpreadsheet(data, options = {}) {
   const { sheetName = 'Sheet', includeHeaders = true, maxChunkChars = DEFAULT_MAX_CHUNK_CHARS } = options
@@ -114,7 +120,7 @@ export function chunkSpreadsheet(data, options = {}) {
       const cellValue = cell === null || cell === undefined ? '(empty)' : String(cell).trim()
       return `${header}: ${cellValue || '(empty)'}`
     }).join(', ')
-    
+
     const rowLine = `Row ${i}: ${rowData}\n`
 
     // If adding this row would exceed the cap or row count, flush current chunk first.
@@ -143,7 +149,8 @@ export function chunkSpreadsheet(data, options = {}) {
 }
 
 /**
- * Process a document and return chunks with metadata
+ * Process a document and return chunks with metadata.
+ * This is the fixed-size chunking strategy (backward compatible default).
  */
 export function processDocument(doc) {
   const { id, title, type, content, url } = doc
@@ -159,8 +166,8 @@ export function processDocument(doc) {
     }
   } else {
     // Text content (docs, etc.)
-    const textContent = typeof content === 'string' 
-      ? content 
+    const textContent = typeof content === 'string'
+      ? content
       : (content ? JSON.stringify(content) : '')
     chunks = chunkText(textContent)
   }
@@ -179,6 +186,29 @@ export function processDocument(doc) {
       text: text.trim(),
       createdAt: new Date().toISOString()
     }))
+}
+
+/**
+ * Strategy dispatcher: choose the right chunking strategy.
+ *
+ * @param {string} strategy - 'hierarchical' or 'fixed'
+ * @param {Object} params - Strategy-specific params
+ * @returns {Array} Chunks
+ */
+export function chunkWithStrategy(strategy, params) {
+  if (strategy === 'hierarchical') {
+    const { type, rows, analysis, text, metadata } = params
+
+    if (type === 'spreadsheet' && rows && analysis) {
+      return chunkSheetByLogicalGroups(rows, analysis, metadata)
+    }
+    if (type === 'document' && text) {
+      return chunkDocumentBySections(text, metadata)
+    }
+  }
+
+  // Default: fixed-size chunking via processDocument
+  return processDocument(params)
 }
 
 /**

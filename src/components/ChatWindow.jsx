@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import MessageBubble from './MessageBubble'
 import TypingIndicator from './TypingIndicator'
@@ -68,6 +68,51 @@ function LoginRequiredOverlay() {
   )
 }
 
+/**
+ * Read SSE stream and progressively update the assistant message
+ */
+async function readStream(response, onText, onMetadata, onError) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Process complete SSE events from buffer
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6)
+
+        if (data === '[DONE]') return
+
+        try {
+          const parsed = JSON.parse(data)
+
+          if (parsed.type === 'text') {
+            onText(parsed.text)
+          } else if (parsed.type === 'metadata') {
+            onMetadata(parsed)
+          } else if (parsed.type === 'error') {
+            onError(parsed.error)
+          }
+        } catch {
+          // Skip unparseable lines
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
 export default function ChatWindow() {
   const { data: session } = useSession()
   const [messages, setMessages] = useState([
@@ -79,6 +124,8 @@ export default function ChatWindow() {
   // This ref is set synchronously before any async work begins.
   const isSubmittingRef = useRef(false)
   const messagesEndRef = useRef(null)
+  // Track the streaming message ID so we can update it in place
+  const streamingMsgIdRef = useRef(null)
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -116,8 +163,6 @@ export default function ChatWindow() {
 
   const handleSendMessage = async (content) => {
     // Synchronous guard: prevents double-submit before React re-renders.
-    // This catches rapid clicks/enters that happen before setIsLoading(true)
-    // takes effect in the DOM.
     if (isSubmittingRef.current) return
     isSubmittingRef.current = true
 
@@ -127,7 +172,7 @@ export default function ChatWindow() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat?stream=true', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -143,16 +188,74 @@ export default function ChatWindow() {
         throw new Error('Failed to get response')
       }
 
-      const data = await response.json()
+      // Check if we got a streaming response
+      const contentType = response.headers.get('content-type') || ''
 
-      // Add assistant message with sources
-      const assistantMessage = {
-        id: Date.now() + 1,
-        content: data.response,
-        isUser: false,
-        sources: data.sources || []
+      if (contentType.includes('text/event-stream') && response.body) {
+        // Streaming path: progressively render tokens
+        const streamMsgId = Date.now() + 1
+        streamingMsgIdRef.current = streamMsgId
+
+        // Add placeholder assistant message
+        setMessages(prev => [...prev, {
+          id: streamMsgId,
+          content: '',
+          isUser: false,
+          sources: [],
+          isStreaming: true
+        }])
+        setIsLoading(false) // Hide typing indicator once text starts
+
+        let sources = []
+
+        await readStream(
+          response,
+          // onText — append text progressively
+          (text) => {
+            setMessages(prev => prev.map(m =>
+              m.id === streamMsgId
+                ? { ...m, content: m.content + text }
+                : m
+            ))
+          },
+          // onMetadata — attach sources
+          (metadata) => {
+            sources = metadata.sources || []
+            setMessages(prev => prev.map(m =>
+              m.id === streamMsgId
+                ? { ...m, sources, isStreaming: false }
+                : m
+            ))
+          },
+          // onError
+          (error) => {
+            console.error('Stream error:', error)
+            setMessages(prev => prev.map(m =>
+              m.id === streamMsgId
+                ? { ...m, content: m.content || "I'm sorry, I encountered an error. Please try again.", isStreaming: false }
+                : m
+            ))
+          }
+        )
+
+        // Finalize: remove streaming flag if metadata event didn't fire
+        setMessages(prev => prev.map(m =>
+          m.id === streamMsgId ? { ...m, isStreaming: false } : m
+        ))
+        streamingMsgIdRef.current = null
+
+      } else {
+        // Non-streaming fallback: parse JSON response
+        const data = await response.json()
+
+        const assistantMessage = {
+          id: Date.now() + 1,
+          content: data.response,
+          isUser: false,
+          sources: data.sources || []
+        }
+        setMessages(prev => [...prev, assistantMessage])
       }
-      setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
       console.error('Chat error:', error)
       const errorMessage = {

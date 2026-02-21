@@ -1,12 +1,13 @@
 /**
  * API Route: /api/chat
  * Handles chat messages with RAG-enhanced responses via Claude API
+ * Supports both streaming (SSE) and non-streaming responses
  */
 
 import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
-import { hybridRetrieval, buildContextualPrompt } from '@/lib/hybridRetrieval'
-import { getStats } from '@/lib/vectorStore'
+import { tieredRetrieval, buildContextualPrompt } from '@/lib/tieredRetrieval'
+import { models, chatConfig } from '@/lib/modelConfig'
 import {
   ErrorCode,
   apiError,
@@ -18,8 +19,6 @@ import {
   chatRateLimiter,
   withTimeout
 } from '@/lib/apiUtils'
-
-const CLAUDE_TIMEOUT_MS = 90_000 // 90 seconds for LLM response
 
 const MAX_MESSAGE_LENGTH = 10_000
 const MAX_HISTORY_ENTRIES = 50
@@ -52,8 +51,163 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+/**
+ * Build the messages array from chat history
+ */
+function buildMessages(history, currentMessage) {
+  const messages = []
+
+  // Add previous messages (skip the welcome message)
+  if (history && history.length > 1) {
+    for (let i = 1; i < history.length; i++) {
+      messages.push({
+        role: history[i].role,
+        content: history[i].content
+      })
+    }
+  }
+
+  // Add current message
+  messages.push({
+    role: 'user',
+    content: currentMessage
+  })
+
+  return messages
+}
+
+/**
+ * Perform RAG retrieval for the query
+ */
+async function performRetrieval(message, context) {
+  let retrievalResults = { results: [], structured: [], semantic: [], related: [], queryType: 'hybrid', totalResults: 0, tiersUsed: [] }
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      retrievalResults = await tieredRetrieval(message, context)
+      console.log(`Tiered retrieval: ${retrievalResults.structured.length} structured, ${retrievalResults.semantic.length} semantic, ${retrievalResults.related?.length || 0} related, tiers: [${retrievalResults.tiersUsed?.join(',')}]`)
+    } catch (ragError) {
+      console.error('RAG error (continuing without context):', ragError.message)
+    }
+  }
+
+  return retrievalResults
+}
+
+/**
+ * Build source metadata from retrieval results
+ */
+function buildSourceMetadata(retrievalResults) {
+  return {
+    queryType: retrievalResults.queryType,
+    sourcesUsed: retrievalResults.totalResults,
+    structuredResults: retrievalResults.structured.length,
+    semanticResults: retrievalResults.semantic.length,
+    relatedResults: retrievalResults.related?.length || 0,
+    tiersUsed: retrievalResults.tiersUsed || [],
+    sources: retrievalResults.results.slice(0, 10).map(r => ({
+      title: r.source,
+      url: r.sourceUrl,
+      type: r.type,
+      score: r.score,
+      tier: r.tier
+    }))
+  }
+}
+
+/**
+ * Handle streaming response via SSE
+ */
+async function handleStreamingResponse(systemPrompt, messages, retrievalResults) {
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      let closed = false
+
+      function safeEnqueue(data) {
+        if (closed) return
+        try {
+          controller.enqueue(encoder.encode(data))
+        } catch {
+          closed = true
+        }
+      }
+
+      function safeClose() {
+        if (closed) return
+        closed = true
+        try {
+          controller.close()
+        } catch {
+          // Already closed
+        }
+      }
+
+      // Timeout guard: abort if streaming takes too long
+      const timeoutId = setTimeout(() => {
+        console.error('Streaming timeout reached')
+        safeEnqueue(`data: ${JSON.stringify({ type: 'error', error: 'Response timed out' })}\n\n`)
+        safeClose()
+      }, chatConfig.timeoutMs)
+
+      try {
+        const messageStream = anthropic.messages.stream({
+          model: models.chat,
+          max_tokens: chatConfig.maxTokens,
+          temperature: chatConfig.temperature,
+          system: systemPrompt,
+          messages: messages
+        })
+
+        messageStream.on('text', (text) => {
+          safeEnqueue(`data: ${JSON.stringify({ type: 'text', text })}\n\n`)
+        })
+
+        messageStream.on('error', (error) => {
+          console.error('Stream error:', error)
+          safeEnqueue(`data: ${JSON.stringify({ type: 'error', error: 'Stream error occurred' })}\n\n`)
+          safeClose()
+        })
+
+        // Wait for the stream to complete
+        const finalMessage = await messageStream.finalMessage()
+
+        // Send metadata event with sources
+        const metadata = {
+          type: 'metadata',
+          ...buildSourceMetadata(retrievalResults),
+          usage: {
+            inputTokens: finalMessage.usage?.input_tokens,
+            outputTokens: finalMessage.usage?.output_tokens
+          }
+        }
+        safeEnqueue(`data: ${JSON.stringify(metadata)}\n\n`)
+        safeEnqueue('data: [DONE]\n\n')
+        safeClose()
+      } catch (error) {
+        console.error('Streaming error:', error)
+        safeEnqueue(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`)
+        safeClose()
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    }
+  })
+}
+
 export async function POST(request) {
   const requestId = generateRequestId()
+  const { searchParams } = new URL(request.url)
+  const useStreaming = searchParams.get('stream') === 'true'
 
   // Auth check
   const { session, errorResponse: authError } = await requireAuth()
@@ -97,52 +251,32 @@ export async function POST(request) {
       email: user.email
     }
 
-    console.log('Chat request from:', user.email, 'Role:', context.role, 'Team:', context.team)
+    console.log('Chat request from:', user.email, 'Role:', context.role, 'Team:', context.team, 'Streaming:', useStreaming)
 
-    // Hybrid RAG: Retrieve relevant context using both structured and semantic search
-    let retrievalResults = { results: [], structured: [], semantic: [], queryType: 'hybrid', totalResults: 0 }
-
-    const stats = await getStats()
-
-    if (process.env.OPENAI_API_KEY) {
-      try {
-        retrievalResults = await hybridRetrieval(message, context)
-        console.log(`Hybrid retrieval: ${retrievalResults.structured.length} structured, ${retrievalResults.semantic.length} semantic results`)
-      } catch (ragError) {
-        console.error('RAG error (continuing without context):', ragError.message)
-      }
-    }
+    // Hybrid RAG retrieval
+    const retrievalResults = await performRetrieval(message, context)
 
     // Build context-aware system prompt
     const systemPrompt = buildContextualPrompt(message, retrievalResults, context)
 
     // Build messages array from history
-    const messages = []
+    const messages = buildMessages(history, message)
 
-    // Add previous messages (skip the welcome message)
-    if (history && history.length > 1) {
-      for (let i = 1; i < history.length; i++) {
-        messages.push({
-          role: history[i].role,
-          content: history[i].content
-        })
-      }
+    // Streaming path
+    if (useStreaming) {
+      return handleStreamingResponse(systemPrompt, messages, retrievalResults)
     }
 
-    // Add current message
-    messages.push({
-      role: 'user',
-      content: message
-    })
-
+    // Non-streaming path (fallback)
     const response = await withTimeout(
       anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
+        model: models.chat,
+        max_tokens: chatConfig.maxTokens,
+        temperature: chatConfig.temperature,
         system: systemPrompt,
         messages: messages
       }),
-      CLAUDE_TIMEOUT_MS,
+      chatConfig.timeoutMs,
       'Claude API response'
     )
 
@@ -151,16 +285,7 @@ export async function POST(request) {
 
     return apiSuccess({
       response: assistantMessage,
-      queryType: retrievalResults.queryType,
-      sourcesUsed: retrievalResults.totalResults,
-      structuredResults: retrievalResults.structured.length,
-      semanticResults: retrievalResults.semantic.length,
-      sources: retrievalResults.results.slice(0, 10).map(r => ({
-        title: r.source,
-        url: r.sourceUrl,
-        type: r.type,
-        score: r.score
-      }))
+      ...buildSourceMetadata(retrievalResults)
     }, requestId)
   } catch (error) {
     console.error('Chat API error:', error)

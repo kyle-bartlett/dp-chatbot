@@ -4,7 +4,7 @@
  * Supports folder traversal, metadata tracking, and background sync
  */
 
-import { google } from 'googleapis'
+import { drive as driveApi, auth as driveAuth } from '@googleapis/drive'
 import { supabase } from './supabaseClient'
 import { withTimeout, withRetry } from './apiUtils'
 
@@ -15,7 +15,7 @@ const MAX_FOLDER_PATH_DEPTH = 20    // Max parent traversal depth
  * Create OAuth2 client with user's access token
  */
 function createOAuthClient(accessToken) {
-  const oauth2Client = new google.auth.OAuth2(
+  const oauth2Client = new driveAuth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET
   )
@@ -37,7 +37,7 @@ export async function listDriveFiles(folderId = 'root', accessToken, options = {
   } = options
 
   const auth = createOAuthClient(accessToken)
-  const drive = google.drive({ version: 'v3', auth })
+  const drive = driveApi({ version: 'v3', auth })
 
   const files = []
 
@@ -45,20 +45,24 @@ export async function listDriveFiles(folderId = 'root', accessToken, options = {
     if (depth > maxDepth) return
 
     try {
-      // Query for files in current folder
+      // Query for files in current folder (paginated to handle >1000 files)
       const query = [`'${currentFolderId}' in parents`, 'trashed = false']
-      
-      const response = await withTimeout(
-        drive.files.list({
-          q: query.join(' and '),
-          fields: 'files(id, name, mimeType, modifiedTime, createdTime, owners, webViewLink, parents)',
-          pageSize: 1000
-        }),
-        DRIVE_API_TIMEOUT_MS,
-        'Drive files list'
-      )
+      let pageToken = null
 
-      const items = response.data.files || []
+      do {
+        const response = await withTimeout(
+          drive.files.list({
+            q: query.join(' and '),
+            fields: 'nextPageToken, files(id, name, mimeType, modifiedTime, createdTime, owners, webViewLink, parents)',
+            pageSize: 1000,
+            ...(pageToken ? { pageToken } : {})
+          }),
+          DRIVE_API_TIMEOUT_MS,
+          'Drive files list'
+        )
+
+        const items = response.data.files || []
+        pageToken = response.data.nextPageToken || null
 
       for (const item of items) {
         if (item.mimeType === 'application/vnd.google-apps.folder') {
@@ -82,6 +86,7 @@ export async function listDriveFiles(folderId = 'root', accessToken, options = {
           })
         }
       }
+      } while (pageToken)
     } catch (error) {
       console.error(`Error traversing folder ${currentFolderId}:`, error.message)
       throw error
@@ -97,7 +102,7 @@ export async function listDriveFiles(folderId = 'root', accessToken, options = {
  */
 export async function getFolderMetadata(folderId, accessToken) {
   const auth = createOAuthClient(accessToken)
-  const drive = google.drive({ version: 'v3', auth })
+  const drive = driveApi({ version: 'v3', auth })
 
   try {
     const response = await withTimeout(
@@ -125,7 +130,7 @@ export async function getFolderPath(folderId, accessToken) {
   }
 
   const auth = createOAuthClient(accessToken)
-  const drive = google.drive({ version: 'v3', auth })
+  const drive = driveApi({ version: 'v3', auth })
   const path = []
 
   let currentId = folderId
@@ -235,6 +240,22 @@ export async function syncFolder(folderId, accessToken, userId, teamContext = 'g
 
   for (const file of files) {
     try {
+      // Check if file has actually changed by comparing modifiedTime
+      const { data: existingFile } = await supabase
+        .from('synced_files')
+        .select('id, modified_time, sync_status')
+        .eq('drive_file_id', file.id)
+        .single()
+
+      // Skip if file hasn't been modified since last sync
+      // Compare as Date timestamps to handle formatting differences (ms vs s precision, TZ)
+      const existingModified = existingFile ? new Date(existingFile.modified_time).getTime() : 0
+      const incomingModified = new Date(file.modifiedTime).getTime()
+      if (existingFile && existingModified === incomingModified && existingFile.sync_status === 'synced') {
+        syncResults.skipped++
+        continue
+      }
+
       // Single atomic upsert — the database handles deduplication via the
       // UNIQUE constraint on drive_file_id. No separate read needed.
       const { data: upsertedRow, error: upsertError } = await supabase

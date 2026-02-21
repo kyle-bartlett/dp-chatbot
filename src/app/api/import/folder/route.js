@@ -72,23 +72,35 @@ export async function POST(req) {
   const { folderId } = body
 
   try {
-    // Dynamic import to save memory on startup
-    const { google } = await import('googleapis')
+    // Use scoped Google API packages
+    const { drive: driveApi, auth: driveAuth } = await import('@googleapis/drive')
 
-    const oauth2Client = new google.auth.OAuth2()
+    const oauth2Client = new driveAuth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    )
     oauth2Client.setCredentials({ access_token: session.accessToken })
 
-    const drive = google.drive({ version: 'v3', auth: oauth2Client })
+    const drive = driveApi({ version: 'v3', auth: oauth2Client })
 
     // folderId is validated by regex above — safe to interpolate into Drive query
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType, webViewLink, modifiedTime)',
-      pageSize: 100
-    })
+    // Paginate to handle folders with >100 files
+    const files = []
+    let pageToken = null
 
-    const files = res.data.files
-    if (!files || files.length === 0) {
+    do {
+      const res = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'nextPageToken, files(id, name, mimeType, webViewLink, modifiedTime)',
+        pageSize: 100,
+        ...(pageToken ? { pageToken } : {})
+      })
+
+      if (res.data.files) files.push(...res.data.files)
+      pageToken = res.data.nextPageToken || null
+    } while (pageToken)
+
+    if (files.length === 0) {
       return apiSuccess({
         message: 'No files found in folder',
         count: 0

@@ -1,6 +1,6 @@
 /**
  * API Route: /api/sync
- * Handles Google Drive folder synchronization
+ * Handles Google Drive folder synchronization with LLM-powered document analysis
  */
 
 import { z } from 'zod'
@@ -21,9 +21,14 @@ import {
 } from '@/lib/driveSync'
 import { fetchSpreadsheet, fetchDocument } from '@/lib/googleApi'
 import { addDocument, addChunks, removeDocument } from '@/lib/vectorStore'
-import { chunkDocument } from '@/lib/chunker'
+import { chunkDocument, chunkWithStrategy } from '@/lib/chunker'
 import { getEmbeddings } from '@/lib/embeddings'
 import { processAndStoreSpreadsheet } from '@/lib/structuredProcessor'
+import {
+  getOrCreateAnalysis,
+  analyzeWorkbookRelationships,
+  storeRelationships
+} from '@/lib/documentAnalyzer'
 import { randomUUID } from 'crypto'
 import {
   ErrorCode,
@@ -185,11 +190,7 @@ export async function POST(request) {
       }
     }
 
-    // Process pending files (fetch content and embed)
-    //
-    // CONCURRENCY FIX: Uses claimFilesForProcessing() which atomically
-    // transitions files from 'pending' to 'processing' using
-    // SELECT FOR UPDATE SKIP LOCKED.
+    // Process pending files (fetch content, analyze, and embed)
     if (action === 'process') {
       const limit = body.limit || 5
 
@@ -234,34 +235,97 @@ export async function POST(request) {
               }
             })
 
+            // Phase 2: LLM analysis per tab
+            const analyses = {}
+            const sheetNames = content.sheets || []
+
+            if (process.env.ANTHROPIC_API_KEY) {
+              for (const sheetName of sheetNames) {
+                const rows = content.content[sheetName]
+                if (rows && rows.length > 0) {
+                  try {
+                    analyses[sheetName] = await getOrCreateAnalysis(
+                      documentId,
+                      sheetName,
+                      rows,
+                      file.name,
+                      sheetNames
+                    )
+                  } catch (analysisError) {
+                    console.error(`Analysis failed for tab "${sheetName}":`, analysisError.message)
+                    // Continue without analysis for this tab
+                  }
+                }
+              }
+
+              // Analyze workbook relationships (only if multiple tabs)
+              if (sheetNames.length >= 2) {
+                try {
+                  const relationships = await analyzeWorkbookRelationships(content.content, file.name)
+                  await storeRelationships(documentId, relationships)
+                  console.log(`Stored ${relationships.length} tab relationships for ${file.name}`)
+                } catch (relError) {
+                  console.error('Relationship analysis failed:', relError.message)
+                }
+              }
+            }
+
+            // Process structured data using LLM analyses (or fallback)
             const structuredResult = await processAndStoreSpreadsheet(content, {
               documentId,
               documentTitle: file.name,
               documentUrl: file.url,
               teamContext: file.team_context
-            })
+            }, Object.keys(analyses).length > 0 ? analyses : null)
 
-            const textContent = formatSpreadsheetAsText(content)
-            const chunks = chunkDocument(textContent, {
-              documentId,
-              documentTitle: file.name,
-              documentUrl: file.url,
-              metadata: {
-                teamContext: file.team_context,
-                type: 'spreadsheet'
+            // Phase 4: Use hierarchical chunking when analysis available, else fixed-size
+            let allChunks = []
+            const hasAnalysis = Object.keys(analyses).length > 0
+
+            if (hasAnalysis) {
+              for (const sheetName of sheetNames) {
+                const rows = content.content[sheetName]
+                if (!rows || rows.length === 0) continue
+
+                const sheetChunks = chunkWithStrategy('hierarchical', {
+                  type: 'spreadsheet',
+                  rows,
+                  analysis: analyses[sheetName],
+                  metadata: {
+                    documentId,
+                    documentTitle: file.name,
+                    documentUrl: file.url,
+                    sheetName,
+                    teamContext: file.team_context
+                  }
+                })
+                allChunks.push(...sheetChunks)
               }
-            })
+            } else {
+              const textContent = formatSpreadsheetAsText(content)
+              allChunks = chunkDocument(textContent, {
+                documentId,
+                documentTitle: file.name,
+                documentUrl: file.url,
+                metadata: {
+                  teamContext: file.team_context,
+                  type: 'spreadsheet'
+                }
+              })
+            }
 
-            if (chunks.length > 0) {
-              const embeddings = await getEmbeddings(chunks.map(c => c.text))
-              await addChunks(chunks, embeddings)
+            if (allChunks.length > 0) {
+              const embeddings = await getEmbeddings(allChunks.map(c => c.text))
+              await addChunks(allChunks, embeddings)
             }
 
             results.push({
               file: file.name,
               success: true,
               structured: structuredResult,
-              chunks: chunks.length
+              chunks: allChunks.length,
+              analysisUsed: hasAnalysis,
+              chunkStrategy: hasAnalysis ? 'hierarchical' : 'fixed'
             })
 
           } else if (file.type === 'document') {
@@ -280,13 +344,15 @@ export async function POST(request) {
               }
             })
 
-            const chunks = chunkDocument(content.content, {
-              documentId,
-              documentTitle: file.name,
-              documentUrl: file.url,
+            // Phase 4: Use section-aware chunking for documents
+            const chunks = chunkWithStrategy('hierarchical', {
+              type: 'document',
+              text: content.content,
               metadata: {
-                teamContext: file.team_context,
-                type: 'document'
+                documentId,
+                documentTitle: file.name,
+                documentUrl: file.url,
+                teamContext: file.team_context
               }
             })
 
@@ -298,7 +364,8 @@ export async function POST(request) {
             results.push({
               file: file.name,
               success: true,
-              chunks: chunks.length
+              chunks: chunks.length,
+              chunkStrategy: 'hierarchical'
             })
           }
 

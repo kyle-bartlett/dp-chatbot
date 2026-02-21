@@ -5,8 +5,9 @@
 
 import OpenAI from 'openai'
 import { withTimeout, withRetry } from './apiUtils'
+import { models, embeddingConfig } from './modelConfig'
 
-const OPENAI_TIMEOUT_MS = 60_000 // 60 seconds for embedding generation
+const OPENAI_TIMEOUT_MS = embeddingConfig.timeoutMs
 
 let openaiClient = null
 
@@ -67,7 +68,7 @@ export async function generateEmbeddings(texts) {
 
   // OpenAI has a limit of ~8000 tokens per request for embeddings
   // Process in batches to be safe
-  const batchSize = 100
+  const batchSize = embeddingConfig.batchSize
   const allEmbeddings = []
 
   for (let i = 0; i < validTexts.length; i += batchSize) {
@@ -159,7 +160,7 @@ export async function generateEmbeddings(texts) {
       const response = await withRetry(
         () => withTimeout(
           client.embeddings.create({
-            model: 'text-embedding-3-small',
+            model: models.embedding,
             input: cleanInput,
             encoding_format: 'float'
           }),
